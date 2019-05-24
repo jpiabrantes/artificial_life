@@ -85,4 +85,4 @@ class EntityBuffer:
         to_idx = self.ptr
         self.ptr, self.path_start_idx = 0, 0
         return (self.obs_buf[:to_idx], self.act_buf[:to_idx], self.adv_buf[:to_idx], self.td_buf[:to_idx],
-                self.log_probs_buf[:to_idx], self.loc_buf[:to_idx], self.pi_buf[:to_idx], self.val_buf[:to_idx])
+                self.log_probs_buf[:to_idx], self.loc_buf[:to_idx], self.pi_buf[:to_idx])
