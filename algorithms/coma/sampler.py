@@ -133,8 +133,8 @@ class Sampler:
                 episodes_sampled += 1
                 self.in_an_episode = False
                 self._collect_entity_buffers_into_species_buffers(agent_buffers, species_buffers)
+                self.species_sampler.show_results(species_indices, info_dict['founders_results'])
                 if not done_sampling:
-                    self.species_sampler.show_results(species_indices, info_dict['founders_results'])
                     species_indices = self.species_sampler.sample(self.n_acs)
                     species_ac_map = self._load_species(species_indices, weight_id_list)
                     raw_obs_dict, done_dict, ep_ret, ep_len, = self.env.reset(species_indices), {'__all__': False}, 0, 0

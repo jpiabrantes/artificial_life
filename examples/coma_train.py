@@ -8,9 +8,6 @@ from envs.bacteria_colony.env_config import env_default_config
 from models.base import COMAActorCritic
 from algorithms.coma.coma_trainer import MultiAgentCOMATrainer
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "0"
-tf.debugging.set_log_device_placement(True)
-
 EAGER = True
 if not EAGER:
     tf.compat.v1.disable_eager_execution()
@@ -58,5 +55,6 @@ ac_creator = lambda: COMAActorCritic(**ac_kwarg)
 # train
 trainer = MultiAgentCOMATrainer(env_creator, ac_creator, population_size, seed=seed, gamma=gamma, lamb=lamb,
                                 n_workers=n_workers, batch_size=batch_size, normalise_observation=True,
-                                sample_batch_size=sample_batch_size, entropy_coeff=entropy_coeff)
+                                sample_batch_size=sample_batch_size, entropy_coeff=entropy_coeff,
+                                normalise_advantages=True)
 trainer.train(epochs, generation)

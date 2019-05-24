@@ -86,7 +86,7 @@ class MultiAgentCOMATrainer:
             pi_optimisation_time, v_optimisation_time, pop_stats = [], [], []
             # TODO: parallelize this for-loop amongst GPU workers ?
             for species_index, variables in species_buffers.items():
-                obs, act, adv, td, old_log_probs, loc, pi, vals, state_action_per_iter, samples_per_iter = variables
+                obs, act, adv, td, old_log_probs, loc, pi, state_action_per_iter, samples_per_iter = variables
                 if len(obs) < self.batch_size:
                     continue
 
@@ -121,6 +121,8 @@ class MultiAgentCOMATrainer:
                                                                                    self.env.n_rows, self.env.n_cols)
                     ptr += samples
 
+                qs = self.ac.critic.predict(states_actions)
+                q = qs[np.arange(len(act)), act]
                 act_td = np.concatenate([act[:, None], td[:, None]], axis=-1)
                 with Timer() as v_optimisation_timer:
                     for i in range(self.train_v_iters):
@@ -144,7 +146,7 @@ class MultiAgentCOMATrainer:
                 v_optimisation_time += [v_optimisation_timer.interval]
                 probs = scipy.special.softmax(logits, axis=1)
                 entropy = np.mean(-np.sum(np.where(probs == 0, 0, probs*np.log(probs)), axis=1))
-                explained_variance = get_explained_variance(td, vals)
+                explained_variance = get_explained_variance(td, q)
                 key_value_pairs = [('LossV', old_value_loss), ('Explained Ret Variance', explained_variance),
                                    ('KL', kl), ('Entropy', entropy), ('LossPi', old_policy_loss)]
                 pop_stats.append({'%s_%s' % (species_index, k): v for k, v in key_value_pairs})
@@ -260,8 +262,7 @@ class MultiAgentCOMATrainer:
                 log_probs_buf = np.empty(size, dtype=np.float32)
                 loc_buf = np.empty((size, 2), dtype=np.int32)
                 pi_buf = np.empty((size, self.env.action_space.n), dtype=np.float32)
-                val_buf = np.empty(size, dtype=np.float32)
-                buffers[species_index] = [obs_buf, act_buf, adv_buf, td_buf, log_probs_buf, loc_buf, pi_buf, val_buf]
+                buffers[species_index] = [obs_buf, act_buf, adv_buf, td_buf, log_probs_buf, loc_buf, pi_buf]
         return buffers
 
     def _concatenate_samplers_results(self, trajectories_list, ext_species_buffers):
