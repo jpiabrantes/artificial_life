@@ -68,7 +68,7 @@ class Worker:
 
                 raw_obs_dict = n_raw_obs_dict
                 ep_len += 1
-            for score, pop_index in zip(info_dict['founders_results'], pop_indices):
+            for score, pop_index in zip(info_dict['founders_total_results'], pop_indices):
                 mean_fitness[pop_index] += score * 1/self.n_rollouts
             mean_len += ep_len * 1/self.n_rollouts
         return mean_fitness, mean_len

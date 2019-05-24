@@ -1,5 +1,6 @@
 import os
 import pickle
+from multiprocessing import cpu_count
 
 import tensorflow as tf
 import numpy as np
@@ -37,7 +38,7 @@ std0_list = [1.0]*n_agents
 seed = 0
 generations = 1000
 save_freq = 10
-n_workers = 8
+n_workers = 10 #cpu_count()
 load = False
 assert popsize % n_agents == 0, 'population size must be a multiple of n_agents'
 
@@ -100,8 +101,8 @@ if __name__ == '__main__':
             es.tell(solutions, negative_fitness)
 
         horizons_list.append((np.mean(horizons), np.min(horizons), np.max(horizons)))
-        returns_list.append([-np.mean(negative_fitness), -np.max(negative_fitness), -np.min(negative_fitness)] for
-                            negative_fitness in negative_fitness_list)
+        returns_list.append([(-np.mean(negative_fitness), -np.max(negative_fitness), -np.min(negative_fitness)) for
+                            negative_fitness in negative_fitness_list])
         print('\nGeneration {}'.format(generation))
         print('Horizon mean: {}, min: {}, max: {}, std: {}'.format(np.mean(horizons), np.min(horizons), np.max(horizons)
                                                                    , np.std(horizons)))
