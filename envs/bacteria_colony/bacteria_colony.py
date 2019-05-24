@@ -57,10 +57,7 @@ class BacteriaColony:
         self.babies_born = None
         self.surplus = None
         self.life_expectancy = None
-        self.prior = None
-        self.competing = None
-        self.prior = defaultdict(lambda: np.zeros((3, 2), np.int))  # {pop: {(A,s): #counts}
-        self.competing = defaultdict(lambda: np.zeros((3, 2), np.int))  # {pop: {(A,s): #competing}
+        self.dna_total_score = None
 
     @staticmethod
     def seed(seed=None):
@@ -77,6 +74,7 @@ class BacteriaColony:
         """
         Agent.id = 1
         self.babies_born = 0
+        self.dna_total_score = [0]*self.n_agents
         self.surplus = MeanTracker()
         self.life_expectancy = MeanTracker()
         # this will be filled by the agents (so that later newborns can add themselves to the world)
@@ -152,6 +150,7 @@ class BacteriaColony:
         dnas, counts = np.unique(dna_map[dna_map != 0], return_counts=True)
         for dna, count in zip(dnas, counts):
             dna_results[int(dna) - 1] = count
+            self.dna_total_score[int(dna) - 1] += count
         for agent_name, dna in self.agent_dna.items():
             reward_dict[agent_name] = dna_results[agent.dna - 1]
 
@@ -162,6 +161,7 @@ class BacteriaColony:
             info_dict['__all__'] = {'surplus': self.surplus.mean, 'babies_born': self.babies_born,
                                     'survivors': len(self.agents), 'life_expectancy': self.life_expectancy.mean}
             info_dict['founders_results'] = dna_results
+            info_dict['founders_total_results'] = self.dna_total_score
         else:
             done_dict['__all__'] = False
 
