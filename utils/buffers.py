@@ -69,10 +69,10 @@ class EntityBuffer:
         vals = np.append(self.val_buf[path_slice], last_value)
 
         # the next two lines implement TD(Lambda) calculation
-        td_delta = rews[:-1] + self.gamma * vals[1:]
-        self.td_buf[path_slice] = misc.discount_cumsum(td_delta, self.gamma * self.lamb)
+        #td_delta = rews[:-1] + self.gamma * vals[1:]
+        #self.td_buf[path_slice] = misc.discount_cumsum(td_delta, self.gamma * self.lamb)
         # the next line computes rewards-to-go, to be targets for the value function
-        # self.ret_buf[path_slice] = misc.discount_cumsum(rews[:-1], self.gamma)
+        self.td_buf[path_slice] = misc.discount_cumsum(rews[:-1], self.gamma)
 
         self.path_start_idx = self.ptr
 
