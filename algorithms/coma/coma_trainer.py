@@ -53,9 +53,11 @@ class MultiAgentCOMATrainer:
 
         self.n_acs = env.n_agents
         self.ac_creator = ac_creator
-        self.ac = ac_creator()
-        self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss)
-        self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss)
+        mirrored_strategy = tf.distribute.MirroredStrategy()
+        with mirrored_strategy.scope():
+            self.ac = ac_creator()
+            self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss)
+            self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss)
 
         self.steps_per_worker = sample_batch_size // n_workers
         if batch_size % n_workers:
