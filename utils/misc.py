@@ -141,7 +141,10 @@ class SpeciesSampler:
         else:
             population = np.maximum([np.random.normal(mu, std) for mu, std in zip(self.rs.mean, self.rs.std)],
                                     np.zeros(self.rs.population_size))
-            prob = population / np.sum(population)
+            if np.all(population == 0):
+                prob = np.ones(self.rs.population_size) / self.rs.population_size
+            else:
+                prob = population / np.sum(population)
         samples = np.random.choice(range(self.rs.population_size), p=prob, replace=True, size=size)
         self._last_sample = samples
         return samples

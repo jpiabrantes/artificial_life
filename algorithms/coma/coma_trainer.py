@@ -146,9 +146,9 @@ class MultiAgentCOMATrainer:
                 probs = scipy.special.softmax(logits, axis=1)
                 entropy = np.mean(-np.sum(np.where(probs == 0, 0, probs*np.log(probs)), axis=1))
                 explained_variance = get_explained_variance(td, q)
-                key_value_pairs = [('LossV', old_value_loss), ('Explained Ret Variance', explained_variance),
+                key_value_pairs = [('LossQ', old_value_loss), ('Explained Variance', explained_variance),
                                    ('KL', kl), ('Entropy', entropy), ('LossPi', old_policy_loss),
-                                   ('TD(lambda) mean', np.mean(td))]
+                                   ('TD(lambda)', np.mean(td), ('Q', np.mean(q)))]
                 pop_stats.append({'%s_%s' % (species_index, k): v for k, v in key_value_pairs})
 
             for species_index in processed_species:
