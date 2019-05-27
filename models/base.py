@@ -75,8 +75,6 @@ class VisionAndFc(kr.Model):
         self.flatten = kl.Flatten()
         self.concat = kl.Concatenate(axis=-1)
         self.out = MLP(last_fc_sizes, num_outputs, (None, None))
-        # warm up
-        # self(np.random.rand(1, np.prod(conv_input_shape) + fc_input_length).astype(np.float32))
 
     def call(self, inputs):
         width, height, depth = self.conv_input_shape
@@ -89,26 +87,28 @@ class VisionAndFc(kr.Model):
 
 
 class GlobalVisionCritic(kr.Model):
-    def __init__(self, conv_input_shape, conv_sizes, fc_sizes, num_outputs):
+    def __init__(self, input_shape, conv_sizes, fc_sizes, num_outputs):
         super().__init__('global_vision_critic')
         self.num_outputs = num_outputs
+
+        rows, cols, depth = input_shape
+        self.one_hot = kl.Lambda(lambda x: tf.one_hot(tf.cast(x, 'int32'), num_outputs), input_shape=(None, rows, cols))
+        self.concat = kl.Concatenate(axis=-1)
         vision_layers = []
         for i, (filters, kernel, stride) in enumerate(conv_sizes):
             if not i:
-                vision_layers += [kl.Conv2D(filters, kernel, stride, activation='relu', input_shape=conv_input_shape)]
+                depth += num_outputs - 1
+                vision_layers += [kl.Conv2D(filters, kernel, stride, activation='relu',
+                                            input_shape=(rows, cols, depth))]
             else:
                 vision_layers += [kl.Conv2D(filters, kernel, stride, activation='relu')]
             vision_layers += [kl.MaxPool2D(pool_size=(2, 2))]
+
         flatten = kl.Flatten()
         fc = MLP(fc_sizes, num_outputs, (None, None))
         self.net = kr.Sequential(vision_layers+[flatten]+[fc])
+        self.build(input_shape=(None, ) + input_shape)
 
     def call(self, inputs):
-        """
-
-        :param inputs: array(batch, rows, cols, dims) - last dim has the actions
-        :return:
-        """
-        actions = tf.one_hot(tf.cast(inputs[:, :, :, -1], tf.int32), depth=self.num_outputs)
-        inputs = tf.concat((inputs[:, :, :, :-1], actions), axis=-1)
-        return self.net(inputs)
+        one_hot = self.one_hot(inputs[:, :, :, -1])
+        return self.net(self.concat([inputs[:, :, :, :-1], one_hot]))

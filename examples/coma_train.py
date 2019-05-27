@@ -43,10 +43,10 @@ actor_args = {'conv_sizes': [(32, (3, 3), 1), (32, (3, 3), 1)],
               'num_outputs': env.action_space.n}
 
 rows, cols, depth = env.critic_observation_shape
-depth += env.action_space.n
+depth += 1  # will give state-actions
 critic_args = {'conv_sizes': [(32, (2, 2), 1), (32, (2, 2), 1), (32, (2, 2), 1)],
                'fc_sizes': [64, 32],
-               'conv_input_shape': (rows, cols, depth),
+               'input_shape': (rows, cols, depth),
                'num_outputs': env.action_space.n}
 
 ac_kwarg = {'actor_args': actor_args, 'critic_args': critic_args, 'observation_space': env.observation_space}
