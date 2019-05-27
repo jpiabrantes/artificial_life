@@ -24,18 +24,19 @@ env = env_creator()
 gamma = 0.99
 lamb = 0.8  # lambda for TD(lambda)
 seed = 0
-sample_batch_size = 3000
-batch_size = 1000
+sample_batch_size = 500
+batch_size = 250
 entropy_coeff = 0.01
 population_size = 10
 
 # parallelism
-n_workers = 8
+n_workers = 1
 DEBUG = n_workers == 1
 ray.init(local_mode=DEBUG)
 
 # actor critic
 actor_args = {'conv_sizes': [(32, (3, 3), 1), (32, (3, 3), 1)],
+              'obs_input_shape': env.observation_space.shape,
               'fc_sizes': [32],
               'last_fc_sizes': [32],
               'conv_input_shape': env.actor_terrain_obs_shape,
