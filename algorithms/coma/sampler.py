@@ -119,7 +119,7 @@ class Sampler:
                         # if entity is alive but episode is over or we're done sampling
                         elif done_dict['__all__']:
                             # infinite episode
-                            buf.finnish_path(0)
+                            buf.finnish_path(val)
                         elif done_sampling:
                             buf.finnish_path(val)
 

@@ -53,11 +53,11 @@ class MultiAgentCOMATrainer:
 
         self.n_acs = env.n_agents
         self.ac_creator = ac_creator
-        mirrored_strategy = tf.distribute.MirroredStrategy()
-        with mirrored_strategy.scope():
-            self.ac = ac_creator()
-            self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss)
-            self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss)
+        # mirrored_strategy = tf.distribute.MirroredStrategy()
+        # with mirrored_strategy.scope():
+        self.ac = ac_creator()
+        self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss)
+        self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss)
 
         self.steps_per_worker = sample_batch_size // n_workers
         if batch_size % n_workers:
@@ -128,14 +128,10 @@ class MultiAgentCOMATrainer:
                 q = qs[np.arange(len(act)), act]
                 act_td = np.concatenate([act[:, None], td[:, None]], axis=-1)
                 with Timer() as v_optimisation_timer:
-                    for i in range(self.train_v_iters):
-                        # TODO: make the fit do the shuffling
-                        result = self.ac.critic.fit(states_actions[indices], act_td[indices],
-                                                    batch_size=self.batch_size, epochs=1, verbose=False)
-                        if not i:
-                            old_value_loss = np.mean(result.history['loss'])
-                        else:
-                            np.random.shuffle(indices)
+                    result = self.ac.critic.fit(states_actions[indices], act_td[indices], shuffle=True,
+                                                batch_size=self.batch_size, verbose=False,
+                                                epochs=round(len(act)/self.batch_size)*self.train_v_iters)
+                    old_value_loss = result.history['loss'][0]
 
                 weights[species_index] = self.ac.get_weights()
                 weights_id_list[species_index] = ray.put(weights[species_index])
