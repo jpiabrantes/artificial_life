@@ -27,7 +27,7 @@ seed = 0
 sample_batch_size = 500
 batch_size = 250
 entropy_coeff = 0.01
-population_size = 10
+population_size = 1
 
 # parallelism
 n_workers = 1
