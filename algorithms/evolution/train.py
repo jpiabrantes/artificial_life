@@ -39,7 +39,7 @@ seed = 0
 generations = 1000
 save_freq = 10
 n_workers = 10 #cpu_count()
-load = False
+load = True
 assert popsize % n_agents == 0, 'population size must be a multiple of n_agents'
 
 ray.init(local_mode=(n_workers == 1))
