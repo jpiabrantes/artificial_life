@@ -86,12 +86,13 @@ class MultiAgentCOMATrainer:
             self.filter_manager.synchronize(self.filters, self.samplers)
             self.species_sampler_manager.synchronize(species_sampler, self.samplers)
             pi_optimisation_time, v_optimisation_time, pop_stats = [], [], []
+            processed_species = []
             # TODO: parallelize this for-loop amongst GPU workers ?
             for species_index, variables in species_buffers.items():
                 obs, act, adv, td, old_log_probs, loc, pi, state_action_per_iter, samples_per_iter = variables
                 if len(obs) < self.batch_size:
                     continue
-
+                processed_species.append(species_index)
                 if self.normalize_advantages:
                     adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-8)
 
@@ -150,14 +151,17 @@ class MultiAgentCOMATrainer:
                                    ('TD(lambda) mean', np.mean(td))]
                 pop_stats.append({'%s_%s' % (species_index, k): v for k, v in key_value_pairs})
 
+            for species_index in processed_species:
+                del species_buffers[species_index]
+
             # get ep_stats from samplers
             ep_metrics = self._concatenate_ep_stats(ray.get([s.get_ep_stats.remote() for s in self.samplers]))
 
             episodes += ep_metrics['EpisodesThisIter']
             ep_metrics.update({'Episodes Sampled': episodes, 'Training Samples': training_samples,
                                'Sampling time': sampling_time.interval,
-                               'Pi optimisation time': np.mean(pi_optimisation_time),
-                               'V optimisation time': np.mean(v_optimisation_time),
+                               'Pi optimisation time': np.sum(pi_optimisation_time),
+                               'V optimisation time': np.sum(v_optimisation_time),
                                'Samples this iter': samples_this_iter})
 
             for stats in pop_stats:
