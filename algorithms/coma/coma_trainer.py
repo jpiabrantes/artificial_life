@@ -53,11 +53,11 @@ class MultiAgentCOMATrainer:
 
         self.n_acs = env.n_agents
         self.ac_creator = ac_creator
-        # mirrored_strategy = tf.distribute.MirroredStrategy()
-        # with mirrored_strategy.scope():
-        self.ac = ac_creator()
-        self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss)
-        self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss)
+        mirrored_strategy = tf.distribute.MirroredStrategy()
+        with mirrored_strategy.scope():
+            self.ac = ac_creator()
+            self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss)
+            self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss)
 
         self.steps_per_worker = sample_batch_size // n_workers
         if batch_size % n_workers:
@@ -95,7 +95,8 @@ class MultiAgentCOMATrainer:
                 if self.normalize_advantages:
                     adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-8)
 
-                self.ac.set_weights(weights[species_index])
+                for var, w in zip(self.ac.variables, weights[species_index]):
+                    var.load(w)
                 act_adv_logs = np.concatenate([act[:, None], adv[:, None], old_log_probs[:, None]], axis=-1)
                 old_policy_loss, old_value_loss = None, None
                 indices = np.arange(len(obs))
@@ -107,7 +108,7 @@ class MultiAgentCOMATrainer:
                             old_policy_loss = np.mean(result.history['loss'])
                         else:
                             np.random.shuffle(indices)
-                        logits = self.ac.actor.predict(obs)
+                        logits = self.ac.actor.predict(obs, batch_size=len(obs))
                         all_log_probs = np.log(scipy.special.softmax(logits, axis=1))
                         log_probs = all_log_probs[np.arange(len(act)), act.astype(np.int32)]
                         # a sample estimate on the kl divergence
@@ -123,7 +124,7 @@ class MultiAgentCOMATrainer:
                                                                                    self.env.n_rows, self.env.n_cols)
                     ptr += samples
 
-                qs = self.ac.critic.predict(states_actions)
+                qs = self.ac.critic.predict(states_actions, batch_size=len(states_actions))
                 q = qs[np.arange(len(act)), act]
                 act_td = np.concatenate([act[:, None], td[:, None]], axis=-1)
                 with Timer() as v_optimisation_timer:
@@ -136,7 +137,6 @@ class MultiAgentCOMATrainer:
                         else:
                             np.random.shuffle(indices)
 
-                # self._save_weights(self.ac, species_index)
                 weights[species_index] = self.ac.get_weights()
                 weights_id_list[species_index] = ray.put(weights[species_index])
                 checkpoint_path = os.path.join(generation_folder, str(species_index), str(episodes))
@@ -150,7 +150,8 @@ class MultiAgentCOMATrainer:
                 entropy = np.mean(-np.sum(np.where(probs == 0, 0, probs*np.log(probs)), axis=1))
                 explained_variance = get_explained_variance(td, q)
                 key_value_pairs = [('LossV', old_value_loss), ('Explained Ret Variance', explained_variance),
-                                   ('KL', kl), ('Entropy', entropy), ('LossPi', old_policy_loss)]
+                                   ('KL', kl), ('Entropy', entropy), ('LossPi', old_policy_loss),
+                                   ('TD(lambda) mean', np.mean(td))]
                 pop_stats.append({'%s_%s' % (species_index, k): v for k, v in key_value_pairs})
 
             # get ep_stats from samplers
@@ -166,8 +167,7 @@ class MultiAgentCOMATrainer:
             for stats in pop_stats:
                 ep_metrics.update(stats)
 
-            print('\n'*2)
-            print(epoch)
+            print('Epoch: ', epoch)
             with train_summary_writer.as_default():
                 for k, v in ep_metrics.items():
                     print(k, v)
@@ -177,6 +177,7 @@ class MultiAgentCOMATrainer:
                 with open(os.path.join(generation_folder, 'variables.pkl'), 'wb') as f:
                     pickle.dump((self.filters, species_sampler, episodes, training_samples), f)
                 print('Saved variables!')
+            print('\n' * 2)
 
     @staticmethod
     def _concatenate_ep_stats(stats_list, min_and_max=False, include_std=False):

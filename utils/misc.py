@@ -147,7 +147,7 @@ class SpeciesSampler:
         return samples
 
     def sync(self, other):
-        self.rs = other.rs
+        self.rs.n[:], self.rs.m[:], self.rs.s[:] = other.rs.n, other.rs.m, other.rs.s
         self.clear_buffer()
 
     def clear_buffer(self):
