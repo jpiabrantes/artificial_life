@@ -53,11 +53,11 @@ class MultiAgentCOMATrainer:
 
         self.n_acs = env.n_agents
         self.ac_creator = ac_creator
-        # mirrored_strategy = tf.distribute.MirroredStrategy()
-        # with mirrored_strategy.scope():
-        self.ac = ac_creator()
-        self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss)
-        self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss)
+        mirrored_strategy = tf.distribute.MirroredStrategy()
+        with mirrored_strategy.scope():
+            self.ac = ac_creator()
+            self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss)
+            self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss)
 
         self.steps_per_worker = sample_batch_size // n_workers
         if batch_size % n_workers:
@@ -148,7 +148,7 @@ class MultiAgentCOMATrainer:
                 explained_variance = get_explained_variance(td, q)
                 key_value_pairs = [('LossQ', old_value_loss), ('Explained Variance', explained_variance),
                                    ('KL', kl), ('Entropy', entropy), ('LossPi', old_policy_loss),
-                                   ('TD(lambda)', np.mean(td), ('Q', np.mean(q)))]
+                                   ('TD(lambda)', np.mean(td)), ('Q', np.mean(q))]
                 pop_stats.append({'%s_%s' % (species_index, k): v for k, v in key_value_pairs})
 
             for species_index in processed_species:
