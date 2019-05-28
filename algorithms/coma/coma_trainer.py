@@ -23,7 +23,7 @@ from algorithms.coma.sampler import Sampler
 class MultiAgentCOMATrainer:
     def __init__(self, env_creator, ac_creator, population_size, update_target_freq=30, seed=0, n_workers=1,
                  sample_batch_size=500, batch_size=250, gamma=1., lamb=0.95, clip_ratio=0.2, pi_lr=3e-4, value_lr=1e-3,
-                 train_pi_iters=80, train_v_iters=50, target_kl=0.01, save_freq=10, normalise_advantages=False,
+                 train_pi_iters=80, train_v_iters=80, target_kl=0.01, save_freq=10, normalise_advantages=False,
                  normalise_observation=False, entropy_coeff=0.01):
         np.random.seed(seed)
         tf.random.set_seed(seed)
@@ -71,12 +71,12 @@ class MultiAgentCOMATrainer:
         generation_folder = './checkpoints/{}/{}'.format(self.env.name, generation)
         tensorboard_folder = os.path.join(generation_folder, 'tensorboard')
         if os.path.isdir(generation_folder):
-            target_weights, self.filters, species_sampler, episodes, training_samples = self._load_generation(generation)
+            weights, self.filters, species_sampler, episodes, training_samples = self._load_generation(generation)
         else:
-            target_weights, species_sampler = self._create_generation(generation)
+            weights, species_sampler = self._create_generation(generation)
             episodes, training_samples = 0, 0
-        weights = [w.copy() for w in target_weights]
-        t_weights_id_list = [ray.put(w) for w in target_weights]
+        weights = [w.copy() for w in weights]
+        weights_id_list = [ray.put(w) for w in weights]
 
         species_trained_epochs = defaultdict(int)
         species_buffers = {}
@@ -84,7 +84,7 @@ class MultiAgentCOMATrainer:
         for epoch in range(epochs):
             samples_this_iter = 0
             with Timer() as sampling_time:
-                results_list = ray.get([worker.rollout.remote(t_weights_id_list) for worker in self.samplers])
+                results_list = ray.get([worker.rollout.remote(weights_id_list) for worker in self.samplers])
             self._concatenate_samplers_results(results_list, species_buffers)
             self.filter_manager.synchronize(self.filters, self.samplers)
             self.species_sampler_manager.synchronize(species_sampler, self.samplers)
@@ -144,10 +144,7 @@ class MultiAgentCOMATrainer:
 
                 species_trained_epochs[species_index] += 1
                 weights[species_index] = self.ac.get_weights()
-                if not (species_trained_epochs[species_index] % self.update_target_freq):
-                    t_weights_id_list[species_index] = weights[species_index].copy()
-                    t_weights_id_list[species_index] = ray.put(target_weights[species_index])
-                    print('Updated target network!')
+                weights_id_list[species_index] = ray.put(weights[species_index])
                 checkpoint_path = os.path.join(generation_folder, str(species_index), str(episodes))
                 self.ac.save_weights(checkpoint_path)
 
