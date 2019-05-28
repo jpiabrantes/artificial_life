@@ -103,6 +103,7 @@ class MultiAgentCOMATrainer:
                 act_adv_logs = np.concatenate([act[:, None], adv[:, None], old_log_probs[:, None]], axis=-1)
                 old_policy_loss, old_value_loss = None, None
                 indices = np.arange(len(obs))
+                predict_indices = indices[:len(obs)//4*4]
                 with Timer() as pi_optimisation_timer:
                     for i in range(self.train_pi_iters):
                         result = self.ac.actor.fit(obs[indices], act_adv_logs[indices], batch_size=self.batch_size,
@@ -111,7 +112,7 @@ class MultiAgentCOMATrainer:
                             old_policy_loss = np.mean(result.history['loss'])
                         else:
                             np.random.shuffle(indices)
-                        logits = self.ac.actor.predict(obs, batch_size=len(obs))
+                        logits = self.ac.actor.predict(obs[predict_indices], batch_size=len(predict_indices))
                         all_log_probs = np.log(scipy.special.softmax(logits, axis=1))
                         log_probs = all_log_probs[np.arange(len(act)), act.astype(np.int32)]
                         # a sample estimate on the kl divergence
@@ -127,7 +128,7 @@ class MultiAgentCOMATrainer:
                                                                                    self.env.n_rows, self.env.n_cols)
                     ptr += samples
 
-                qs_old = self.ac.critic.predict(states_actions, batch_size=len(states_actions))
+                qs_old = self.ac.critic.predict(states_actions[predict_indices], batch_size=len(predict_indices))
                 q_old = qs_old[np.arange(len(act)), act]
                 act_td = np.concatenate([act[:, None], td[:, None]], axis=-1)
                 with Timer() as v_optimisation_timer:
@@ -137,7 +138,7 @@ class MultiAgentCOMATrainer:
                     old_value_loss = result.history['loss'][0]
 
                 new_value_loss = result.history['loss'][-1]
-                qs = self.ac.critic.predict(states_actions, batch_size=len(states_actions))
+                qs = self.ac.critic.predict(states_actions[predict_indices], batch_size=len(predict_indices))
                 q = qs[np.arange(len(act)), act]
 
                 species_trained_epochs[species_index] += 1
@@ -176,9 +177,9 @@ class MultiAgentCOMATrainer:
                                'Pi optimisation time': np.sum(pi_optimisation_time),
                                'V optimisation time': np.sum(v_optimisation_time),
                                'Samples this iter': samples_this_iter})
-
-            for stats in pop_stats:
-                ep_metrics.update(stats)
+            if ep_metrics['EpisodesThisIter']:
+                for stats in pop_stats:
+                    ep_metrics.update(stats)
 
             print('Epoch: ', epoch)
             with train_summary_writer.as_default():
