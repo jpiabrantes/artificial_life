@@ -79,6 +79,7 @@ def create_vision_and_fc_model(obs_input_shape, conv_sizes, fc_sizes, last_fc_si
     out = MLP(last_fc_sizes, num_outputs, (None, None))(concat)
     return kr.Model(inputs=input_layer, outputs=[out])
 
+
 def create_model(input_shape, conv_sizes, fc_sizes, num_outputs):
     num_outputs = num_outputs
     rows, cols, depth = input_shape
