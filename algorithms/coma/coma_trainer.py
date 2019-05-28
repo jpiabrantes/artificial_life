@@ -103,8 +103,6 @@ class MultiAgentCOMATrainer:
                 act_adv_logs = np.concatenate([act[:, None], adv[:, None], old_log_probs[:, None]], axis=-1)
                 old_policy_loss, old_value_loss = None, None
                 indices = np.arange(len(obs))
-                predict_indices = indices[:len(indices)//4*4]
-                predict_batch_size = len(predict_indices)//4
                 with Timer() as pi_optimisation_timer:
                     for i in range(self.train_pi_iters):
                         result = self.ac.actor.fit(obs[indices], act_adv_logs[indices], batch_size=self.batch_size,
@@ -113,7 +111,7 @@ class MultiAgentCOMATrainer:
                             old_policy_loss = np.mean(result.history['loss'])
                         else:
                             np.random.shuffle(indices)
-                        logits = self.ac.actor.predict(obs[predict_indices], batch_size=predict_batch_size)
+                        logits = self.ac.actor.predict(obs, batch_size=len(obs))
                         all_log_probs = np.log(scipy.special.softmax(logits, axis=1))
                         log_probs = all_log_probs[np.arange(len(act)), act.astype(np.int32)]
                         # a sample estimate on the kl divergence
@@ -129,7 +127,7 @@ class MultiAgentCOMATrainer:
                                                                                    self.env.n_rows, self.env.n_cols)
                     ptr += samples
 
-                qs_old = self.ac.critic.predict(states_actions[predict_indices], batch_size=predict_batch_size)
+                qs_old = self.ac.critic.predict(states_actions, batch_size=len(states_actions))
                 q_old = qs_old[np.arange(len(act)), act]
                 act_td = np.concatenate([act[:, None], td[:, None]], axis=-1)
                 with Timer() as v_optimisation_timer:
@@ -139,7 +137,7 @@ class MultiAgentCOMATrainer:
                     old_value_loss = result.history['loss'][0]
 
                 new_value_loss = result.history['loss'][-1]
-                qs = self.ac.critic.predict(states_actions[predict_indices], batch_size=predict_batch_size)
+                qs = self.ac.critic.predict(states_actions, batch_size=len(states_actions))
                 q = qs[np.arange(len(act)), act]
 
                 species_trained_epochs[species_index] += 1
@@ -154,8 +152,8 @@ class MultiAgentCOMATrainer:
                 v_optimisation_time += [v_optimisation_timer.interval]
                 probs = scipy.special.softmax(logits, axis=1)
                 entropy = np.mean(-np.sum(np.where(probs == 0, 0, probs*np.log(probs)), axis=1))
-                explained_variance_old = get_explained_variance(td[predict_indices], q_old)
-                explained_variance = get_explained_variance(td[predict_indices], q)
+                explained_variance_old = get_explained_variance(td, q_old)
+                explained_variance = get_explained_variance(td, q)
                 key_value_pairs = [('LossQ', old_value_loss), ('deltaQLoss', old_value_loss-new_value_loss),
                                    ('Explained Variance', explained_variance),
                                    ('Explained Variance Old', explained_variance_old),
