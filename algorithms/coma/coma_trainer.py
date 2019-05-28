@@ -21,13 +21,14 @@ from algorithms.coma.sampler import Sampler
 
 
 class MultiAgentCOMATrainer:
-    def __init__(self, env_creator, ac_creator, population_size, seed=0, n_workers=1, sample_batch_size=500,
-                 batch_size=250, gamma=1., lamb=0.95, clip_ratio=0.2, pi_lr=3e-4, value_lr=1e-3, train_pi_iters=80,
-                 train_v_iters=80, target_kl=0.01, save_freq=10, normalise_advantages=False,
+    def __init__(self, env_creator, ac_creator, population_size, update_target_freq=30, seed=0, n_workers=1,
+                 sample_batch_size=500, batch_size=250, gamma=1., lamb=0.95, clip_ratio=0.2, pi_lr=3e-4, value_lr=1e-3,
+                 train_pi_iters=80, train_v_iters=2, target_kl=0.01, save_freq=10, normalise_advantages=False,
                  normalise_observation=False, entropy_coeff=0.01):
         np.random.seed(seed)
         tf.random.set_seed(seed)
 
+        self.update_target_freq = update_target_freq
         self.entropy_coeff = entropy_coeff
         self.clip_ratio = clip_ratio
         self.normalize_advantages = normalise_advantages
@@ -70,24 +71,25 @@ class MultiAgentCOMATrainer:
         generation_folder = './checkpoints/{}/{}'.format(self.env.name, generation)
         tensorboard_folder = os.path.join(generation_folder, 'tensorboard')
         if os.path.isdir(generation_folder):
-            weights, self.filters, species_sampler, episodes, training_samples = self._load_generation(generation)
+            target_weights, self.filters, species_sampler, episodes, training_samples = self._load_generation(generation)
         else:
-            weights, species_sampler = self._create_generation(generation)
+            target_weights, species_sampler = self._create_generation(generation)
             episodes, training_samples = 0, 0
-        weights_id_list = [ray.put(w) for w in weights]
+        weights = [w.copy() for w in target_weights]
+        t_weights_id_list = [ray.put(w) for w in target_weights]
 
+        species_trained_epochs = defaultdict(int)
         species_buffers = {}
         train_summary_writer = tf.summary.create_file_writer(tensorboard_folder)
         for epoch in range(epochs):
             samples_this_iter = 0
             with Timer() as sampling_time:
-                results_list = ray.get([worker.rollout.remote(weights_id_list) for worker in self.samplers])
+                results_list = ray.get([worker.rollout.remote(t_weights_id_list) for worker in self.samplers])
             self._concatenate_samplers_results(results_list, species_buffers)
             self.filter_manager.synchronize(self.filters, self.samplers)
             self.species_sampler_manager.synchronize(species_sampler, self.samplers)
             pi_optimisation_time, v_optimisation_time, pop_stats = [], [], []
             processed_species = []
-            # TODO: parallelize this for-loop amongst GPU workers ?
             for species_index, variables in species_buffers.items():
                 obs, act, adv, td, old_log_probs, loc, pi, state_action_per_iter, samples_per_iter = variables
                 if len(obs) < self.batch_size:
@@ -125,8 +127,8 @@ class MultiAgentCOMATrainer:
                                                                                    self.env.n_rows, self.env.n_cols)
                     ptr += samples
 
-                qs = self.ac.critic.predict(states_actions, batch_size=len(states_actions))
-                q = qs[np.arange(len(act)), act]
+                qs_old = self.ac.critic.predict(states_actions, batch_size=len(states_actions))
+                q_old = qs_old[np.arange(len(act)), act]
                 act_td = np.concatenate([act[:, None], td[:, None]], axis=-1)
                 with Timer() as v_optimisation_timer:
                     result = self.ac.critic.fit(states_actions[indices], act_td[indices], shuffle=True,
@@ -134,8 +136,16 @@ class MultiAgentCOMATrainer:
                                                 epochs=round(len(act)/self.batch_size)*self.train_v_iters)
                     old_value_loss = result.history['loss'][0]
 
+                new_value_loss = result.history['loss'][-1]
+                qs = self.ac.critic.predict(states_actions, batch_size=len(states_actions))
+                q = qs[np.arange(len(act)), act]
+
+                species_trained_epochs[species_index] += 1
                 weights[species_index] = self.ac.get_weights()
-                weights_id_list[species_index] = ray.put(weights[species_index])
+                if not (species_trained_epochs[species_index] % self.update_target_freq):
+                    t_weights_id_list[species_index] = weights[species_index].copy()
+                    t_weights_id_list[species_index] = ray.put(target_weights[species_index])
+                    print('Updated target network!')
                 checkpoint_path = os.path.join(generation_folder, str(species_index), str(episodes))
                 self.ac.save_weights(checkpoint_path)
 
@@ -145,8 +155,11 @@ class MultiAgentCOMATrainer:
                 v_optimisation_time += [v_optimisation_timer.interval]
                 probs = scipy.special.softmax(logits, axis=1)
                 entropy = np.mean(-np.sum(np.where(probs == 0, 0, probs*np.log(probs)), axis=1))
+                explained_variance_old = get_explained_variance(td, q_old)
                 explained_variance = get_explained_variance(td, q)
-                key_value_pairs = [('LossQ', old_value_loss), ('Explained Variance', explained_variance),
+                key_value_pairs = [('LossQ', old_value_loss), ('deltaQLoss', old_value_loss-new_value_loss),
+                                   ('Explained Variance', explained_variance),
+                                   ('Explained Variance Old', explained_variance_old),
                                    ('KL', kl), ('Entropy', entropy), ('LossPi', old_policy_loss),
                                    ('TD(lambda)', np.mean(td)), ('Q', np.mean(q))]
                 pop_stats.append({'%s_%s' % (species_index, k): v for k, v in key_value_pairs})

@@ -24,8 +24,8 @@ env = env_creator()
 gamma = 0.99
 lamb = 0.8  # lambda for TD(lambda)
 seed = 0
-sample_batch_size = 500
-batch_size = 250
+sample_batch_size = 50
+batch_size = 30
 entropy_coeff = 0.01
 population_size = 1
 
