@@ -5,6 +5,10 @@ import numpy as np
 import scipy.signal
 
 
+def agent_name_to_policy_index(agent_name):
+    return int(agent_name.split('_')[0])
+
+
 class Enum(tuple):
     __getattr__ = tuple.index
 
