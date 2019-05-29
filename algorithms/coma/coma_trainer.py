@@ -65,9 +65,9 @@ class MultiAgentCOMATrainer:
                               metrics=[kl, entropy])
 
         self.steps_per_worker = sample_batch_size // n_workers
-        # if batch_size % n_workers:
-        #     self.batch_size = n_workers * self.steps_per_worker
-        #     print('WARNING: the batch_size was changed to: %d' % self.batch_size)
+        if sample_batch_size % n_workers:
+            sample_batch_size = n_workers * self.steps_per_worker
+            print('WARNING: the sample_batch_size was changed to: %d' % sample_batch_size)
         self.samplers = [Sampler.remote(self.steps_per_worker, gamma, lamb, env_creator, ac_creator, i,
                                         population_size, normalise_observation) for i in range(n_workers)]
 
@@ -106,11 +106,10 @@ class MultiAgentCOMATrainer:
                     adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-8)
 
                 act_adv_logs = np.concatenate([act[:, None], adv[:, None], old_log_probs[:, None]], axis=-1)
-                indices = np.arange(len(obs))
                 with Timer() as pi_optimisation_timer:
-                    result = self.ac.actor.fit(obs[indices], act_adv_logs[indices], batch_size=self.batch_size,
+                    result = self.ac.actor.fit(obs, act_adv_logs, batch_size=self.batch_size, shuffle=True,
                                                epochs=self.train_pi_iters, verbose=False,
-                                               callbacks=self.actor_callbacks, shuffle=True)
+                                               callbacks=self.actor_callbacks)
                     old_policy_loss = result.history['loss'][0]
                     old_entropy = result.history['entropy'][0]
                     kl = result.history['kl'][-1]
@@ -124,8 +123,8 @@ class MultiAgentCOMATrainer:
 
                 act_td = np.concatenate([act[:, None], td[:, None]], axis=-1)
                 with Timer() as v_optimisation_timer:
-                    result = self.ac.critic.fit(states_actions[indices], act_td[indices], shuffle=True,
-                                                batch_size=self.batch_size, verbose=False, epochs=self.train_v_iters)
+                    result = self.ac.critic.fit(states_actions, act_td, shuffle=True, batch_size=self.batch_size,
+                                                verbose=False, epochs=self.train_v_iters)
                     old_value_loss = result.history['loss'][0]
                     value_loss = result.history['loss'][-1]
                     old_r2score = result.history['r2score'][0]
