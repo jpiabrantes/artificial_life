@@ -168,33 +168,26 @@ class BacteriaColony:
         return obs_dict, reward_dict, done_dict, info_dict
 
     def render(self, state=None, mode='rgb_array'):
-        pass
-        # if state is None:
-        #     state = self._state
-        # if mode == 'rgb_array':
-        #     endowment = sum(self.birth_endowment)/2
-        #     # agents
-        #     a_hsv = np.zeros((self.n_rows, self.n_cols, 3), np.float32)
-        #     mask = state[:, :, State.AGENTS] > 0
-        #     a_hsv[mask, 0] = 350
-        #     a_hsv[mask, 1] = 0.5
-        #     agent_age = state[mask, State.AGE]
-        #     agent_sugar = state[mask, State.AGENT_SUGAR]
-        #     is_fertile = (agent_sugar > endowment) & (agent_age > self.fertility_age) & (agent_age < self.infertility_age)
-        #     a_hsv[mask, 2] = is_fertile*1 + np.logical_not(is_fertile)*0.5
-        #     a_rgb = cvtColor(a_hsv, COLOR_HSV2RGB)
-        #
-        #     # sugar
-        #     s_hsv = np.zeros((self.n_rows, self.n_cols, 3), np.float32)
-        #     s_hsv[:, :, 0] = 57
-        #     s_hsv[:, :, 1] = 0.5
-        #     s_hsv[:, :, 2] = np.minimum(state[:, :, State.SUGAR], self.highest_sugar_peak) \
-        #                      / self.highest_sugar_peak
-        #     s_rgb = cvtColor(s_hsv, COLOR_HSV2RGB)
-        #     s_rgb[mask] = a_rgb[mask]
-        #     return s_rgb
-        # else:
-        #     super(BacteriaColony, self).render(mode)
+        if state is None:
+            state = self._state
+        if mode == 'rgb_array':
+            # agents
+            a_hsv = np.zeros((self.n_rows, self.n_cols, 3), np.float32)
+            mask = state[:, :, State.AGENTS] > 0
+            a_hsv[mask, 0] = 180
+            a_hsv[mask, 1] = 0
+            a_hsv[mask, 2] = 0.5
+            a_rgb = cvtColor(a_hsv, COLOR_HSV2RGB)
+
+            # sugar
+            dirt = np.array((120., 72, 0)) / 255
+            grass = np.array((85., 168, 74)) / 255
+            norm_sugar = (state[:, :, State.SUGAR]/self.max_capacity)[..., None]
+            s_rgb = norm_sugar*grass+(1-norm_sugar)*dirt
+            s_rgb[mask] = a_rgb[mask]
+            return s_rgb
+        else:
+            super(BacteriaColony, self).render(mode)
 
     def get_kinship_map(self, agent_name):
         """
