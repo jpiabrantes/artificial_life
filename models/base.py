@@ -29,31 +29,43 @@ class MLP(kr.Model):
             return inputs
 
 
-class DiscreteActionAC(kr.Model):
-    def __init__(self, name, actor, critic, observation_space):
-        super().__init__(name)
-        self.actor = actor
-        self.critic = critic
+class DiscreteActor(kr.Model):
+    def __init__(self, inputs, outputs):
+        super(DiscreteActor, self).__init__(name='discrete_vision_and_fc_policy', inputs=inputs, outputs=outputs)
         self.action_dist = ProbabilityDistribution()
-        #  necessary to figure out the input for the `action_dist` layer
-        self.action_logp_pi(np.random.rand(*observation_space.shape)[None, :].astype(np.float32))
-
-    def call(self, inputs):
-        return self.actor(inputs), self.critic(inputs)
 
     def action_logp_pi(self, obs):
-        logits = self.actor.predict(obs)
+        logits = self.predict(obs)
         actions = self.action_dist.predict(logits)
         pi = scipy.special.softmax(logits, axis=1)
         logp = np.log(pi[np.arange(len(actions)), actions])
         return actions, logp, pi
 
+    def get_actions(self, inputs):
+        logits = self.predict(inputs)
+        return self.action_dist.predict(logits)
 
-class COMAActorCritic(DiscreteActionAC):
+    def load_flat_array(self, arr):
+        ptr = 0
+        weights = []
+        for var in self.variables:
+            var_size = np.prod(var.shape)
+            weights.append(np.reshape(arr[ptr: ptr + var_size], var.shape))
+            ptr += var_size
+        self.set_weights(weights)
+
+
+class COMAActorCritic(kr.Model):
     def __init__(self, actor_args, critic_args, observation_space):
-        actor = create_vision_and_fc_model(**actor_args)
-        critic = create_model(**critic_args)
-        super().__init__('vision_fc_ac', actor, critic, observation_space)
+        super().__init__('vision_fc_ac')
+        self.actor = create_vision_and_fc_actor(**actor_args)
+        self.critic = create_model(**critic_args)
+
+    def call(self, inputs):
+        return self.actor(inputs), self.critic(inputs)
+
+    def action_logp_pi(self, obs):
+        return self.actor.action_logp_pi(obs)
 
     def val_and_adv(self, states_actions, actions, pi):
         qs = self.critic.predict(states_actions)
@@ -62,7 +74,7 @@ class COMAActorCritic(DiscreteActionAC):
         return val, adv
 
 
-def create_vision_and_fc_model(obs_input_shape, conv_sizes, fc_sizes, last_fc_sizes, num_outputs, conv_input_shape,
+def create_vision_and_fc_actor(obs_input_shape, conv_sizes, fc_sizes, last_fc_sizes, num_outputs, conv_input_shape,
                                fc_input_length):
     input_layer = kl.Input(shape=obs_input_shape)
 
@@ -77,7 +89,7 @@ def create_vision_and_fc_model(obs_input_shape, conv_sizes, fc_sizes, last_fc_si
 
     concat = kl.Concatenate(axis=-1)([flatten, fc])
     out = MLP(last_fc_sizes, num_outputs, (None, None))(concat)
-    return kr.Model(inputs=input_layer, outputs=[out])
+    return DiscreteActor(inputs=input_layer, outputs=[out])
 
 
 def create_model(input_shape, conv_sizes, fc_sizes, num_outputs):

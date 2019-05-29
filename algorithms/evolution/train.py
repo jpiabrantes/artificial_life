@@ -1,6 +1,5 @@
 import os
 import pickle
-from multiprocessing import cpu_count
 
 import tensorflow as tf
 import numpy as np
@@ -9,7 +8,7 @@ from tqdm import tqdm
 
 from algorithms.evolution.worker import Worker
 from algorithms.evolution.es import CMAES
-from algorithms.evolution.policies import DiscreteVisionAndFcPolicy
+from models.base import create_vision_and_fc_actor
 from algorithms.evolution.helpers import load_variables
 from utils.filters import FilterManager, MeanStdFilter
 from envs.bacteria_colony.bacteria_colony import BacteriaColony
@@ -26,19 +25,20 @@ policy_args = {'conv_sizes': [(32, (3, 3), 1), (32, (3, 3), 1)],
                'last_fc_sizes': [32],
                'conv_input_shape': env.actor_terrain_obs_shape,
                'fc_input_length': np.prod(env.observation_space.shape) - np.prod(env.actor_terrain_obs_shape),
-               'num_outputs': env.action_space.n}
+               'num_outputs': env.action_space.n,
+               'obs_input_shape': env.observation_space.shape}
 
-policy_creator = lambda: DiscreteVisionAndFcPolicy(**policy_args)
+policy_creator = lambda: create_vision_and_fc_actor(**policy_args)
 po = policy_creator()
 rollouts_per_group = 1
 popsize = 20
-n_groups_per_sample = 6
+n_groups_per_sample = 1
 n_agents = 5
 std0_list = [1.0]*n_agents
 seed = 0
 generations = 1000
 save_freq = 10
-n_workers = 10 #cpu_count()
+n_workers = 1 #cpu_count()
 load = True
 assert popsize % n_agents == 0, 'population size must be a multiple of n_agents'
 
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     os.makedirs(checkpoint_path, exist_ok=True)
     opts_list = [{'popsize': popsize, 'seed': seed} for _ in range(n_agents)]
     if load:
-        mu0_list, stds_list, horizons_list, returns_list, filters = load_variables(env)
+        last_generation, mu0_list, stds_list, horizons_list, returns_list, filters = load_variables(env)
         for opts, stds in zip(opts_list, stds_list):
             opts['CMA_stds'] = stds
     else:
