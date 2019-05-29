@@ -27,3 +27,22 @@ def get_r2score(n_actions):
         unexplained_error = tf.reduce_sum(tf.square(y - prediction))
         return 1 - unexplained_error/total_error
     return r2score
+
+
+# CALLBACKS
+class EarlyStoppingKL(tf.keras.callbacks.Callback):
+    def __init__(self, target_kl):
+        super(EarlyStoppingKL, self).__init__()
+
+        self.target_kl = target_kl
+        self.stopped_epoch = 0
+
+    def on_epoch_end(self, epoch, logs=None):
+        kl = logs.get('kl')
+        if abs(kl) > 1.5*self.target_kl:
+            self.stopped_epoch = epoch
+            self.model.stop_training = True
+
+    def on_train_end(self, logs=None):
+        if self.stopped_epoch > 0:
+            print('Epoch %05d: early stopping' % (self.stopped_epoch + 1))

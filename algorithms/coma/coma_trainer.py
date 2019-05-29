@@ -13,29 +13,11 @@ import tensorflow as tf
 import tensorflow.keras as kr
 import ray
 
-from utils.misc import Timer, SpeciesSampler, SpeciesSamplerManager, get_explained_variance
+from utils.misc import Timer, SpeciesSampler, SpeciesSamplerManager
 from utils.filters import FilterManager, MeanStdFilter
 from utils.coma_helper import get_states_actions_for_locs
-from utils.metrics import get_kl_metric, entropy, get_r2score
+from utils.metrics import get_kl_metric, entropy, get_r2score, EarlyStoppingKL
 from algorithms.coma.sampler import Sampler
-
-
-class EarlyStoppingKL(kr.callbacks.Callback):
-    def __init__(self, target_kl):
-        super(EarlyStoppingKL, self).__init__()
-
-        self.target_kl = target_kl
-        self.stopped_epoch = 0
-
-    def on_epoch_end(self, epoch, logs=None):
-        kl = logs.get('kl')
-        if abs(kl) > 1.5*self.target_kl:
-            self.stopped_epoch = epoch
-            self.model.stop_training = True
-
-    def on_train_end(self, logs=None):
-        if self.stopped_epoch > 0:
-            print('Epoch %05d: early stopping' % (self.stopped_epoch + 1))
 
 
 class MultiAgentCOMATrainer:
