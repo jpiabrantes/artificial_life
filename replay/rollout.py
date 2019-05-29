@@ -45,6 +45,7 @@ def rollout(env, exp_name, policies, species_indices, obs_filter):
 
         raw_obs_dict = n_raw_obs_dict
         ep_len += 1
+        dicts.append(episode_dict)
 
     with open(os.path.join('./dicts', '%s.pkl' % exp_name), 'wb') as f:
         pickle.dump(dicts, f)
