@@ -5,10 +5,8 @@ import tensorflow as tf
 import numpy as np
 
 from utils.filters import MeanStdFilter, apply_filters
-
-
-def agent_name_to_policy_index(agent_name):
-    return int(agent_name.split('_')[0])
+from utils.misc import agent_name_to_policy_index
+from pdb import set_trace as pdb
 
 
 @ray.remote(num_cpus=1)
