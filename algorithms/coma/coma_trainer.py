@@ -8,7 +8,6 @@ import os
 import pickle
 from datetime import datetime
 
-import scipy
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as kr
@@ -17,7 +16,26 @@ import ray
 from utils.misc import Timer, SpeciesSampler, SpeciesSamplerManager, get_explained_variance
 from utils.filters import FilterManager, MeanStdFilter
 from utils.coma_helper import get_states_actions_for_locs
+from utils.metrics import get_kl_metric, entropy, get_r2score
 from algorithms.coma.sampler import Sampler
+
+
+class EarlyStoppingKL(kr.callbacks.Callback):
+    def __init__(self, target_kl):
+        super(EarlyStoppingKL, self).__init__()
+
+        self.target_kl = target_kl
+        self.stopped_epoch = 0
+
+    def on_epoch_end(self, epoch, logs=None):
+        kl = logs.get('kl')
+        if abs(kl) > 1.5*self.target_kl:
+            self.stopped_epoch = epoch
+            self.model.stop_training = True
+
+    def on_train_end(self, logs=None):
+        if self.stopped_epoch > 0:
+            print('Epoch %05d: early stopping' % (self.stopped_epoch + 1))
 
 
 class MultiAgentCOMATrainer:
@@ -54,11 +72,15 @@ class MultiAgentCOMATrainer:
 
         self.n_acs = env.n_agents
         self.ac_creator = ac_creator
-        mirrored_strategy = tf.distribute.MirroredStrategy()
-        with mirrored_strategy.scope():
-            self.ac = ac_creator()
-            self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss)
-            self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss)
+
+        kl = get_kl_metric(self.env.action_space.n)
+        r2score = get_r2score(self.env.action_space.n)
+        self.actor_callbacks = [EarlyStoppingKL(self.target_kl)]
+        self.ac = ac_creator()
+        self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss,
+                               metrics=[r2score])
+        self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss,
+                              metrics=[kl, entropy])
 
         self.steps_per_worker = sample_batch_size // n_workers
         # if batch_size % n_workers:
@@ -94,31 +116,22 @@ class MultiAgentCOMATrainer:
                 obs, act, adv, td, old_log_probs, loc, pi, state_action_per_iter, samples_per_iter = variables
                 if len(obs) < self.batch_size:
                     continue
+                for var, w in zip(self.ac.variables, weights[species_index]):
+                    var.load(w)
                 processed_species.append(species_index)
+
                 if self.normalize_advantages:
                     adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-8)
 
-                for var, w in zip(self.ac.variables, weights[species_index]):
-                    var.load(w)
                 act_adv_logs = np.concatenate([act[:, None], adv[:, None], old_log_probs[:, None]], axis=-1)
-                old_policy_loss, old_value_loss = None, None
                 indices = np.arange(len(obs))
                 with Timer() as pi_optimisation_timer:
-                    for i in range(self.train_pi_iters):
-                        result = self.ac.actor.fit(obs[indices], act_adv_logs[indices], batch_size=self.batch_size,
-                                                   epochs=1, verbose=False)
-                        if not i:
-                            old_policy_loss = np.mean(result.history['loss'])
-                        else:
-                            np.random.shuffle(indices)
-                        logits = self.ac.actor.predict(obs, batch_size=len(obs))
-                        all_log_probs = np.log(scipy.special.softmax(logits, axis=1))
-                        log_probs = all_log_probs[np.arange(len(act)), act.astype(np.int32)]
-                        # a sample estimate on the kl divergence
-                        kl = -np.mean(log_probs - old_log_probs)
-                        if abs(kl) > 1.5 * self.target_kl:
-                            print('stopped training at iter {}'.format(i))
-                            break
+                    result = self.ac.actor.fit(obs[indices], act_adv_logs[indices], batch_size=self.batch_size,
+                                               epochs=self.train_pi_iters, verbose=False,
+                                               callbacks=self.actor_callbacks, shuffle=True)
+                    old_policy_loss = result.history['loss'][0]
+                    old_entropy = result.history['entropy'][0]
+                    kl = result.history['kl'][-1]
 
                 states_actions = np.empty((len(loc),) + state_action_per_iter.shape[1:])
                 ptr = 0
@@ -127,18 +140,14 @@ class MultiAgentCOMATrainer:
                                                                                    self.env.n_rows, self.env.n_cols)
                     ptr += samples
 
-                qs_old = self.ac.critic.predict(states_actions, batch_size=len(states_actions))
-                q_old = qs_old[np.arange(len(act)), act]
                 act_td = np.concatenate([act[:, None], td[:, None]], axis=-1)
                 with Timer() as v_optimisation_timer:
                     result = self.ac.critic.fit(states_actions[indices], act_td[indices], shuffle=True,
-                                                batch_size=self.batch_size, verbose=False,
-                                                epochs=round(len(act)/self.batch_size)*self.train_v_iters)
+                                                batch_size=self.batch_size, verbose=False, epochs=self.train_v_iters)
                     old_value_loss = result.history['loss'][0]
-
-                new_value_loss = result.history['loss'][-1]
-                qs = self.ac.critic.predict(states_actions, batch_size=len(states_actions))
-                q = qs[np.arange(len(act)), act]
+                    value_loss = result.history['loss'][-1]
+                    old_r2score = result.history['r2score'][0]
+                    r2score = result.history['r2score'][-1]
 
                 species_trained_epochs[species_index] += 1
                 weights[species_index] = self.ac.get_weights()
@@ -150,15 +159,11 @@ class MultiAgentCOMATrainer:
                 training_samples += len(obs)
                 pi_optimisation_time += [pi_optimisation_timer.interval]
                 v_optimisation_time += [v_optimisation_timer.interval]
-                probs = scipy.special.softmax(logits, axis=1)
-                entropy = np.mean(-np.sum(np.where(probs == 0, 0, probs*np.log(probs)), axis=1))
-                explained_variance_old = get_explained_variance(td, q_old)
-                explained_variance = get_explained_variance(td, q)
-                key_value_pairs = [('LossQ', old_value_loss), ('deltaQLoss', old_value_loss-new_value_loss),
-                                   ('Explained Variance', explained_variance),
-                                   ('Explained Variance Old', explained_variance_old),
-                                   ('KL', kl), ('Entropy', entropy), ('LossPi', old_policy_loss),
-                                   ('TD(lambda)', np.mean(td)), ('Q', np.mean(q))]
+                key_value_pairs = [('LossQ', old_value_loss), ('deltaQLoss', old_value_loss-value_loss),
+                                   ('Old R2 score', old_r2score),
+                                   ('R2 score', r2score),
+                                   ('KL', kl), ('Old entropy', old_entropy), ('LossPi', old_policy_loss),
+                                   ('TD(lambda)', np.mean(td))]
                 pop_stats.append({'%s_%s' % (species_index, k): v for k, v in key_value_pairs})
 
             for species_index in processed_species:
@@ -200,13 +205,14 @@ class MultiAgentCOMATrainer:
                     total_stats[k].extend(v)
 
         metrics = {'EpisodesThisIter': len(total_stats['ep_len'])}
-        for k, v in total_stats.items():
-            metrics['Avg_' + k] = np.mean(v)
-            if min_and_max:
-                metrics['Min_' + k] = np.min(v)
-                metrics['Max_' + k] = np.max(v)
-            if include_std:
-                metrics['Std_' + k] = np.std(v)
+        if metrics['EpisodesThisIter']:
+            for k, v in total_stats.items():
+                metrics['Avg_' + k] = np.mean(v)
+                if min_and_max:
+                    metrics['Min_' + k] = np.min(v)
+                    metrics['Max_' + k] = np.max(v)
+                if include_std:
+                    metrics['Std_' + k] = np.std(v)
         return metrics
 
     def _load_generation(self, generation):
@@ -254,7 +260,8 @@ class MultiAgentCOMATrainer:
         log_probs = tf.reduce_sum(tf.one_hot(actions, depth=self.env.action_space.n) * all_log_probs, axis=-1)
         ratio = tf.exp(log_probs - old_log_probs)
         min_adv = tf.where(advantages > 0, (1 + self.clip_ratio) * advantages, (1 - self.clip_ratio) * advantages)
-        entropy = tf.reduce_mean(-tf.reduce_sum(tf.where(probs == 0., tf.zeros_like(probs), probs*all_log_probs), axis=1))
+        entropy = tf.reduce_mean(-tf.reduce_sum(tf.where(probs == 0., tf.zeros_like(probs), probs*all_log_probs),
+                                                axis=1))
         surrogate_loss = -tf.reduce_mean(tf.minimum(ratio * advantages, min_adv))
         return surrogate_loss - self.entropy_coeff*entropy
 
