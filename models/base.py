@@ -51,8 +51,8 @@ class DiscreteActionAC(kr.Model):
 
 class COMAActorCritic(DiscreteActionAC):
     def __init__(self, actor_args, critic_args, observation_space):
-        actor = VisionAndFc(**actor_args)
-        critic = GlobalVisionCritic(**critic_args)
+        actor = create_vision_and_fc_model(**actor_args)
+        critic = create_model(**critic_args)
         super().__init__('vision_fc_ac', actor, critic, observation_space)
 
     def val_and_adv(self, states_actions, actions, pi):
@@ -62,53 +62,39 @@ class COMAActorCritic(DiscreteActionAC):
         return val, adv
 
 
-class VisionAndFc(kr.Model):
-    def __init__(self, conv_sizes, fc_sizes, last_fc_sizes, num_outputs, conv_input_shape, fc_input_length):
-        super().__init__('vision_and_fc')
-        self.conv_input_shape = conv_input_shape
-        self.fc = MLP(fc_sizes, 0, (None, fc_input_length))
-        filters, kernel, stride = conv_sizes[0]
-        vision_layers = [kl.Conv2D(filters, kernel, stride, activation='relu', input_shape=conv_input_shape)]
-        vision_layers += [kl.Conv2D(filters, kernel, stride, activation='relu') for filters, kernel, stride
-                          in conv_sizes[1:]]
-        self.vision = kr.Sequential(vision_layers)
-        self.flatten = kl.Flatten()
-        self.concat = kl.Concatenate(axis=-1)
-        self.out = MLP(last_fc_sizes, num_outputs, (None, None))
-        # warm up
-        # self(np.random.rand(1, np.prod(conv_input_shape) + fc_input_length).astype(np.float32))
+def create_vision_and_fc_model(obs_input_shape, conv_sizes, fc_sizes, last_fc_sizes, num_outputs, conv_input_shape,
+                               fc_input_length):
+    input_layer = kl.Input(shape=obs_input_shape)
 
-    def call(self, inputs):
-        width, height, depth = self.conv_input_shape
-        sight = tf.reshape(inputs[:, :height*width*depth], [-1, height, width, depth])
-        fc_input = inputs[:, height*width*depth:]
-        fc_out = self.fc(fc_input)
-        vision_out = self.vision(sight)
-        concat = self.concat([self.flatten(vision_out), fc_out])
-        return self.out(concat)
+    width, height, depth = conv_input_shape
+    conv_input = tf.reshape(tf.slice(input_layer, (0, 0), (-1, height*width*depth)), [-1, height, width, depth])
+    for filters, kernel, stride in conv_sizes:
+        conv_input = kl.Conv2D(filters, kernel, stride, activation='relu')(conv_input)
+    flatten = kl.Flatten()(conv_input)
+
+    fc_input = tf.slice(input_layer, (0, height*width*depth), (-1, fc_input_length))
+    fc = MLP(fc_sizes, 0, (None, fc_input_length))(fc_input)
+
+    concat = kl.Concatenate(axis=-1)([flatten, fc])
+    out = MLP(last_fc_sizes, num_outputs, (None, None))(concat)
+    return kr.Model(inputs=input_layer, outputs=[out])
 
 
-class GlobalVisionCritic(kr.Model):
-    def __init__(self, conv_input_shape, conv_sizes, fc_sizes, num_outputs):
-        super().__init__('global_vision_critic')
-        self.num_outputs = num_outputs
-        vision_layers = []
-        for i, (filters, kernel, stride) in enumerate(conv_sizes):
-            if not i:
-                vision_layers += [kl.Conv2D(filters, kernel, stride, activation='relu', input_shape=conv_input_shape)]
-            else:
-                vision_layers += [kl.Conv2D(filters, kernel, stride, activation='relu')]
-            vision_layers += [kl.MaxPool2D(pool_size=(2, 2))]
-        flatten = kl.Flatten()
-        fc = MLP(fc_sizes, num_outputs, (None, None))
-        self.net = kr.Sequential(vision_layers+[flatten]+[fc])
+def create_model(input_shape, conv_sizes, fc_sizes, num_outputs):
+    num_outputs = num_outputs
+    rows, cols, depth = input_shape
+    input_layer = kl.Input(shape=(rows, cols, depth))
+    actions = tf.slice(input_layer, [0, 0, 0, depth - 1], [-1, rows, cols, 1])
+    non_actions = tf.slice(input_layer, [0, 0, 0, 0], [-1, rows, cols, depth - 1])
+    one_hot = kl.Lambda(lambda x: tf.one_hot(tf.cast(x, 'int32'), num_outputs),
+                        input_shape=(rows, cols))(actions)
+    concat = kl.Concatenate(axis=-1)([non_actions, tf.reshape(one_hot, (-1, rows, cols, num_outputs))])
+    vision_layer = concat
+    for i, (filters, kernel, stride) in enumerate(conv_sizes):
+        vision_layer = kl.Conv2D(filters, kernel, stride, activation='relu')(vision_layer)
+        vision_layer = kl.MaxPool2D(pool_size=(2, 2))(vision_layer)
 
-    def call(self, inputs):
-        """
+    flatten = kl.Flatten()(vision_layer)
+    dense = MLP(fc_sizes, num_outputs, (None, None))(flatten)
+    return kr.Model(inputs=input_layer, outputs=[dense])
 
-        :param inputs: array(batch, rows, cols, dims) - last dim has the actions
-        :return:
-        """
-        actions = tf.one_hot(tf.cast(inputs[:, :, :, -1], tf.int32), depth=self.num_outputs)
-        inputs = tf.concat((inputs[:, :, :, :-1], actions), axis=-1)
-        return self.net(inputs)

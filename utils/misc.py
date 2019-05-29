@@ -5,10 +5,6 @@ import numpy as np
 import scipy.signal
 
 
-def get_explained_variance(y_true, y_pred):
-    return 1 - np.cov(np.array(y_true) - np.array(y_pred)) / np.cov(y_true)
-
-
 class Enum(tuple):
     __getattr__ = tuple.index
 
@@ -66,18 +62,62 @@ class SpeciesSamplerManager(object):
 
         remote_ss = ray.get([r.get_species_sampler.remote() for r in workers])
         for rss in remote_ss:
-            local_species_sampler.update(rss)
+            local_species_sampler.update(rss.buffer)
 
         remote_copy = ray.put(local_species_sampler)
         [r.sync_species_sampler.remote(remote_copy) for r in workers]
 
 
-class SpeciesSampler:
+class SpeciesRunningStat:
     def __init__(self, population_size):
         self.population_size = population_size
-        self._m = np.zeros(population_size)
-        self._s = np.zeros(population_size)
-        self._n = np.zeros(population_size)
+        self.m = np.zeros(population_size)
+        self.s = np.zeros(population_size)
+        self.n = np.zeros(population_size)
+
+    def show_results(self, species_indices, values):
+        for i, value in zip(species_indices, values):
+            last_n = self.n[i]
+            self.n[i] += 1
+            if self.n[i] == 1:
+                self.m[i] = value
+            else:
+                delta = value - self.m[i]
+                self.m[i] += delta / self.n[i]
+                self.s[i] += delta ** 2 * last_n / self.n[i]
+
+    @property
+    def mean(self):
+        return self.m
+
+    @property
+    def var(self):
+        return [s / (n - 1) if n > 1 else m ** 2 for s, n, m in zip(self.s, self.n, self.m)]
+
+    @property
+    def std(self):
+        return np.sqrt(self.var)
+
+    def update(self, other):
+        n1 = self.n
+        n2 = other.n
+        n = n1 + n2
+        # Avoid divide by zero, which creates nans
+        mask = n != 0
+        n, n1, n2 = n[mask], n1[mask], n2[mask]
+        delta = self.m[mask] - other.m[mask]
+        delta2 = delta * delta
+        m = (n1 * self.m[mask] + n2 * other.m[mask]) / n
+        s = self.s[mask] + other.s[mask] + delta2 * n1 * n2 / n
+        self.n[mask] = n
+        self.m[mask] = m
+        self.s[mask] = s
+
+
+class SpeciesSampler:
+    def __init__(self, population_size):
+        self.rs = SpeciesRunningStat(population_size)
+        self.buffer = SpeciesRunningStat(population_size)
         self._last_sample = None
 
     def show_results(self, species_indices, values):
@@ -86,55 +126,31 @@ class SpeciesSampler:
         assert np.all(unique_values_1 == unique_values_2) and np.all(counts_1 == counts_2), "Showing results for " \
                                                                                             "policies that weren't " \
                                                                                             "sampled"
-        for i, value in zip(species_indices, values):
-            last_n = self._n[i]
-            self._n[i] += 1
-            if self._n[i] == 1:
-                self._m[i] = value
-            else:
-                delta = value - self._m[i]
-                self._m[i] += delta / self._n[i]
-                self._s[i] += delta ** 2 * last_n / self._n[i]
+        self.rs.show_results(species_indices, values)
+        self.buffer.show_results(species_indices, values)
         self._last_sample = None
 
     def sample(self, size):
         assert self._last_sample is None, 'Show results before sampling again'
-        if np.any(self._n == 0):  # if there is a species that hasn't been sampled yet, assume uniform distribution.
-            prob = np.ones(self.population_size)/self.population_size
+        if np.any(self.rs.n == 0):  # if there is a species that hasn't been sampled yet, assume uniform distribution.
+            prob = np.ones(self.rs.population_size)/self.rs.population_size
         else:
-            population = np.maximum([np.random.normal(mu, std) for mu, std in zip(self.mean, self.std)],
-                                    np.zeros(self.population_size))
-            prob = population / np.sum(population)
-        samples = np.random.choice(range(self.population_size), p=prob, replace=True, size=size)
+            population = np.maximum([np.random.normal(mu, std) for mu, std in zip(self.rs.mean, self.rs.std)],
+                                    np.zeros(self.rs.population_size))
+            if np.all(population == 0):
+                prob = np.ones(self.rs.population_size) / self.rs.population_size
+            else:
+                prob = population / np.sum(population)
+        samples = np.random.choice(range(self.rs.population_size), p=prob, replace=True, size=size)
         self._last_sample = samples
         return samples
 
-    @property
-    def mean(self):
-        return self._m
-
-    @property
-    def var(self):
-        return [s / (n - 1) if n > 1 else m ** 2 for s, n, m in zip(self._s, self._n, self._m)]
-
-    @property
-    def std(self):
-        return np.sqrt(self.var)
-
-    def update(self, other):
-        n1 = self._n
-        n2 = other._n
-        n = n1 + n2
-        # Avoid divide by zero, which creates nans
-        mask = n != 0
-        n, n1, n2 = n[mask], n1[mask], n2[mask]
-        delta = self._m[mask] - other._m[mask]
-        delta2 = delta * delta
-        m = (n1 * self._m[mask] + n2 * other._m[mask]) / n
-        s = self._s[mask] + other._s[mask] + delta2 * n1 * n2 / n
-        self._n[mask] = n
-        self._m[mask] = m
-        self._s[mask] = s
-
     def sync(self, other):
-        self._n, self._m, self._s = other._n, other._m, other._s
+        self.rs.n[:], self.rs.m[:], self.rs.s[:] = other.rs.n, other.rs.m, other.rs.s
+        self.clear_buffer()
+
+    def clear_buffer(self):
+        self.buffer = SpeciesRunningStat(self.rs.population_size)
+
+    def update(self, other_buffer):
+        self.rs.update(other_buffer)

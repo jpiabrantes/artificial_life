@@ -66,13 +66,13 @@ class EntityBuffer:
 
         path_slice = slice(self.path_start_idx, self.ptr)
         rews = np.append(self.rew_buf[path_slice], last_value)
-        vals = np.append(self.val_buf[path_slice], last_value)
+        #vals = np.append(self.val_buf[path_slice], last_value)
 
-        # the next two lines implement TD(Lambda) calculation
-        td_delta = rews[:-1] + self.gamma * vals[1:]
-        self.td_buf[path_slice] = misc.discount_cumsum(td_delta, self.gamma * self.lamb)
+        # the next two lines implement TTD(Lambda) calculation. 12.3 Intro to RL
+        #delta = rews[:-1] + self.gamma * vals[1:] - vals[:-1]
+        #self.td_buf[path_slice] = vals[:-1] + misc.discount_cumsum(delta, self.gamma * self.lamb)
         # the next line computes rewards-to-go, to be targets for the value function
-        # self.ret_buf[path_slice] = misc.discount_cumsum(rews[:-1], self.gamma)
+        self.td_buf[path_slice] = misc.discount_cumsum(rews[:-1], self.gamma)
 
         self.path_start_idx = self.ptr
 
@@ -85,4 +85,4 @@ class EntityBuffer:
         to_idx = self.ptr
         self.ptr, self.path_start_idx = 0, 0
         return (self.obs_buf[:to_idx], self.act_buf[:to_idx], self.adv_buf[:to_idx], self.td_buf[:to_idx],
-                self.log_probs_buf[:to_idx], self.loc_buf[:to_idx], self.pi_buf[:to_idx], self.val_buf[:to_idx])
+                self.log_probs_buf[:to_idx], self.loc_buf[:to_idx], self.pi_buf[:to_idx])

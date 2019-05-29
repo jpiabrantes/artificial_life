@@ -58,16 +58,15 @@ class Sampler:
             species_indices, raw_obs_dict, ep_ret, ep_len = [self.state[s] for s in
                                                              ('species_indices', 'raw_obs_dict', 'ep_ret', 'ep_len')]
             species_ac_map = self._load_species(species_indices, weight_id_list)
-            n_active_agents = len(raw_obs_dict)
         else:  # new episode
             species_indices = self.species_sampler.sample(self.n_acs)
             species_ac_map = self._load_species(species_indices, weight_id_list)
             raw_obs_dict, done_dict, ep_ret, ep_len, = self.env.reset(species_indices), {'__all__': False}, 0, 0
-            n_active_agents = len(species_indices)
 
         states_actions_buf, samples_buf = [], []
         agent_name_ac, agent_buffers, done_dict = {}, {}, {'__all__': False}
-        while collected_samples < self.sample_batch_size - n_active_agents:
+        done_sampling = False
+        while not done_sampling:
             if not self.in_an_episode:
                 self.in_an_episode = True
             global_raw_obs = raw_obs_dict['state']
@@ -99,7 +98,7 @@ class Sampler:
             collected_samples += len(reward_dict)
             ep_len += 1
             n_active_agents = len(raw_obs_dict)
-            done_sampling = not (collected_samples < self.sample_batch_size - n_active_agents)
+            done_sampling = collected_samples >= self.sample_batch_size - n_active_agents
 
             # store relevant info in the entities buffers
             for ac_name, info in ac_info.items():
@@ -118,28 +117,38 @@ class Sampler:
                                 last_value = 0
                             buf.finnish_path(last_value)
                         # if entity is alive but episode is over or we're done sampling
-                        elif done_dict['__all__'] or done_sampling:
+                        elif done_dict['__all__']:
+                            # infinite episode
+                            buf.finnish_path(val)
+                        elif done_sampling:
                             buf.finnish_path(val)
 
             states_actions_buf.append(state_action)
             if done_dict['__all__']:
+                # update vars
+                self.in_an_episode = False
+                episodes_sampled += 1
+
+                # show results to species sampler
                 species_results = defaultdict(list)
                 for species_index, result in zip(species_indices, info_dict['founders_results']):
                     species_results[species_index].append(result)
+                self.species_sampler.show_results(species_indices, info_dict['founders_results'])
+
+                # gather episode metrics
                 stats = {'ep_len': ep_len, 'ep_ret': ep_ret}
                 stats.update(info_dict['__all__'])
                 stats.update({'%s_survivers' % i: np.mean(r) for i, r in species_results.items()})
                 self.ep_stats.add(stats)
-                episodes_sampled += 1
-                self.in_an_episode = False
+
+                # concat entities buffers into species buffers
                 self._collect_entity_buffers_into_species_buffers(agent_buffers, species_buffers)
+
                 if not done_sampling:
-                    self.species_sampler.show_results(species_indices, info_dict['founders_results'])
                     species_indices = self.species_sampler.sample(self.n_acs)
                     species_ac_map = self._load_species(species_indices, weight_id_list)
                     raw_obs_dict, done_dict, ep_ret, ep_len, = self.env.reset(species_indices), {'__all__': False}, 0, 0
                     agent_name_ac, agent_buffers = {}, {}
-                    n_active_agents = len(species_indices)
 
         if self.in_an_episode:
             # We stopped in the middle of an episode! Let's store the state so that we can carry on later.
