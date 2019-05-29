@@ -5,10 +5,6 @@ import numpy as np
 import scipy.signal
 
 
-def get_explained_variance(y_true, y_pred):
-    return 1 - np.cov(np.array(y_true) - np.array(y_pred)) / np.cov(y_true)
-
-
 class Enum(tuple):
     __getattr__ = tuple.index
 
