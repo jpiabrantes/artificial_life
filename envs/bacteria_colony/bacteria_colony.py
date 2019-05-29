@@ -210,8 +210,7 @@ class BacteriaColony:
     def to_dict(self):
         agents_dict = {}
         for agent in self.agents.values():
-            if agent.alive:
-                agents_dict[agent.id] = agent.to_dict()
+            agents_dict[agent.id] = agent.to_dict()
         result = {'agents': agents_dict,
                   'state': self._state.copy(),
                   'iter': self.iter,

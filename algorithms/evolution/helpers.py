@@ -3,7 +3,8 @@ import pickle
 
 
 def load_variables(env, generation=None):
-    checkpoint_path = './checkpoints/{}'.format(env.name)
+    file_dir = os.path.dirname(os.path.abspath(__file__))
+    checkpoint_path = os.path.join(file_dir, 'checkpoints', env.name)
     if generation is None:
         with open(os.path.join(checkpoint_path, 'last_checkpoint.txt')) as f:
             last_generation = int(f.readline())
