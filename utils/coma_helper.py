@@ -2,7 +2,6 @@ import numpy as np
 
 
 def get_states_actions_for_locs(state_action, locs, n_rows, n_cols):
-    print(state_action[..., 0].sum())
     states_actions = np.empty((len(locs), ) + state_action.shape)
     # center state and action maps on agent
     for i, (row, col) in enumerate(locs):
