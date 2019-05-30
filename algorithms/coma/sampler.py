@@ -63,14 +63,13 @@ class Sampler:
             species_ac_map = self._load_species(species_indices, weight_id_list)
             raw_obs_dict, done_dict, ep_ret, ep_len, = self.env.reset(species_indices), {'__all__': False}, 0, 0
 
-        states_actions_buf, samples_buf = [], []
+        raw_states_actions_buf, samples_buf = [], []
         agent_name_ac, agent_buffers, done_dict = {}, {}, {'__all__': False}
         done_sampling = False
         while not done_sampling:
             if not self.in_an_episode:
                 self.in_an_episode = True
             global_raw_obs = raw_obs_dict['state']
-            global_obs = self.filters['CriticObsFilter'](global_raw_obs)
             del raw_obs_dict['state']
 
             # collect and filter observations for each ac
@@ -81,8 +80,8 @@ class Sampler:
 
             # compute state-action value and advantage
             # input: log_prob, action, global-action-state
-            state_action = np.concatenate((global_obs, global_actions[..., None]), axis=-1)
-            val_map = self._compute_vals_and_advs(ac_info, state_action)
+            raw_state_action = np.concatenate((global_raw_obs, global_actions[..., None]), axis=-1)
+            val_map = self._compute_vals_and_advs(ac_info, raw_state_action, self.filters['CriticObsFilter'])
 
             # step
             n_raw_obs_dict, reward_dict, done_dict, info_dict = self.env.step(action_dict)
@@ -124,7 +123,7 @@ class Sampler:
                         elif done_sampling:
                             buf.finnish_path(val)
 
-            states_actions_buf.append(state_action)
+            raw_states_actions_buf.append(raw_state_action)
             if done_dict['__all__']:
                 # update vars
                 self.in_an_episode = False
@@ -158,7 +157,7 @@ class Sampler:
             self.state = {k: v for k, v in zip(keys, values)}
 
         self._collect_entity_buffers_into_species_buffers(agent_buffers, species_buffers)
-        species_buffers['global'] = [states_actions_buf, samples_buf]
+        species_buffers['global'] = [raw_states_actions_buf, samples_buf]
         return species_buffers
 
     def _load_species(self, species_indices, weight_id_list):
@@ -207,10 +206,12 @@ class Sampler:
             " {} vs {}".format(action_dict.keys(), raw_obs_dict.keys())
         return action_dict, global_action
 
-    def _compute_vals_and_advs(self, ac_info, state_action):
+    def _compute_vals_and_advs(self, ac_info, state_action, critic_filter):
         val_map = np.zeros((self.env.n_rows, self.env.n_cols), np.float32)
         for ac_name, info in ac_info.items():
             states_actions = get_states_actions_for_locs(state_action, info['locs'], self.env.n_rows, self.env.n_cols)
+            for state_action in states_actions:
+                state_action[..., :-1] = critic_filter(state_action[..., :-1])
             vals, advs = self.acs[ac_name].val_and_adv(states_actions, info['actions'], info['pis'])
             info['vals'], info['advs'] = vals, advs
             for val, (row, col) in zip(vals, info['locs']):
