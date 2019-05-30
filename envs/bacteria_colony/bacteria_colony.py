@@ -20,6 +20,9 @@ class BacteriaColony:
     reward_range = (0.0, float('inf'))
 
     def __init__(self, config):
+        self.State = State
+        self.Terrain = Terrain
+
         # env parameters
         self.n_rows = config['n_rows']
         self.n_cols = config['n_cols']

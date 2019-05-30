@@ -3,7 +3,7 @@ import os
 
 import pygame
 
-from replay.panes import BacteriaAttributeRenderer, PolicyRenderer, GameRenderer
+from replay.panes import BacteriaAttributeRenderer, PolicyRenderer, GameRenderer, FamilyRenderer
 
 
 HEIGHT = 512
@@ -49,11 +49,14 @@ class MainHolder:
         game_screen = self.screen.subsurface(0, 0, self.width//2, self.width//2)
         self.children.add(GameRenderer(game_screen, self.g_variables))
 
-        # attr_screen = self.screen.subsurface(self.width//2, 0, self.width//2, self.height//4)
-        # self.children.add(BacteriaAttributeRenderer(attr_screen, g_struct))
-        #
-        # policy_screen = self.screen.subsurface(self.width // 2, self.height//4, self.width//2, self.height // 4)
-        # self.children.add(PolicyRenderer(policy_screen, g_struct))
+        attr_screen = self.screen.subsurface(self.width // 2, 0, self.width//2, self.height//4)
+        self.children.add(BacteriaAttributeRenderer(attr_screen, self.g_variables))
+
+        policy_screen = self.screen.subsurface(self.width // 2, self.height//4, self.width//2, self.height // 4)
+        self.children.add(PolicyRenderer(policy_screen, self.g_variables))
+
+        family_screen = self.screen.subsurface(self.width // 2, 2*self.height//4, self.width//2, 2*self.height // 4)
+        self.children.add(FamilyRenderer(family_screen, self.g_variables))
 
     def render(self, dict_):
         for child in self.children:
