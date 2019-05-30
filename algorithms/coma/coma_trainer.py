@@ -79,11 +79,11 @@ class MultiAgentCOMATrainer:
     def train(self, epochs, generation, save_freq=10):
         generation_folder = './checkpoints/{}/{}'.format(self.env.name, generation)
         tensorboard_folder = os.path.join(generation_folder, 'tensorboard', 'coma_%d' % time())
-        if os.path.isdir(generation_folder):
-            weights, self.filters, species_sampler, episodes, training_samples = self._load_generation(generation)
-        else:
-            weights, species_sampler = self._create_generation(generation)
-            episodes, training_samples = 0, 0
+        # if os.path.isdir(generation_folder):
+        #     weights, self.filters, species_sampler, episodes, training_samples = self._load_generation(generation)
+        # else:
+        weights, species_sampler = self._create_generation(generation)
+        episodes, training_samples = 0, 0
         target_weights = [w.critic.copy() for w in weights]
         weights_id_list = [ray.put(w) for w in weights]
 
@@ -132,7 +132,7 @@ class MultiAgentCOMATrainer:
 
                 species_trained_epochs[species_index] += 1
                 if not (species_trained_epochs[species_index] % self.update_target_freq):
-                    target_weights[species_index] = self.ac.critic.get_weights()
+                    #target_weights[species_index] = self.ac.critic.get_weights()
                     print('Updated target weights!')
                 weights[species_index] = Weights(actor=self.ac.actor.get_weights(), critic=self.ac.critic.get_weights())
                 weights_id_list[species_index] = ray.put(Weights(weights[species_index].actor,
@@ -216,15 +216,15 @@ class MultiAgentCOMATrainer:
     def _create_generation(self, generation):
         generation_folder = './checkpoints/{}/{}'.format(self.env.name, generation)
         tensorboard_folder = os.path.join(generation_folder, 'tensorboard', datetime.now().strftime("%m-%d-%Y_%H-%M-%S"))
-        os.makedirs(generation_folder)
-        os.makedirs(tensorboard_folder)
+        os.makedirs(generation_folder, exist_ok=True)
+        os.makedirs(tensorboard_folder, exist_ok=True)
         episodes, collected_samples = 0, 0
         weights = []
         if generation == 0:
             weights = [Weights(self.ac.actor.get_weights(), self.ac.critic.get_weights())]*self.population_size
             for species_index in range(self.population_size):
                 species_folder = os.path.join(generation_folder, str(species_index))
-                os.makedirs(species_folder)
+                os.makedirs(species_folder, exist_ok=True)
                 checkpoint_path = os.path.join(species_folder, str(episodes))
                 self.ac.save_weights(checkpoint_path)
         policy_sampler = SpeciesSampler(self.population_size)
