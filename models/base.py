@@ -57,9 +57,9 @@ class DiscreteActor(kr.Model):
 
 class COMAActorCritic(kr.Model):
     def __init__(self, actor_args, critic_args, observation_space):
-        super().__init__('vision_fc_ac')
-        self.actor = create_vision_and_fc_actor(**actor_args)
-        self.critic = create_model(**critic_args)
+        super().__init__('coma_ac')
+        self.actor = create_vision_and_fc_network(**actor_args)
+        self.critic = create_global_critic(**critic_args)
 
     def call(self, inputs):
         return self.actor(inputs), self.critic(inputs)
@@ -74,8 +74,25 @@ class COMAActorCritic(kr.Model):
         return val, adv
 
 
-def create_vision_and_fc_actor(obs_input_shape, conv_sizes, fc_sizes, last_fc_sizes, num_outputs, conv_input_shape,
-                               fc_input_length):
+class PPOActorCritic(kr.Model):
+    def __init__(self, network_args, num_actions):
+        super().__init__('ppo_ac')
+        self.actor = create_vision_and_fc_network(**network_args, num_outputs=num_actions)
+        self.critic = create_vision_and_fc_network(**network_args, num_outputs=1, actor=False)
+
+    def call(self, inputs):
+        return self.actor(inputs), self.critic(inputs)
+
+    def action_value_logprobs(self, obs):
+        logits, value = self.predict(obs)
+        actions = self.actor.action_dist.predict(logits)
+        all_log_probs = np.log(scipy.special.softmax(logits, axis=1))
+        log_probs = all_log_probs[np.arange(len(actions)), actions]
+        return actions, np.squeeze(value, axis=-1), log_probs
+
+
+def create_vision_and_fc_network(obs_input_shape, conv_sizes, fc_sizes, last_fc_sizes, num_outputs, conv_input_shape,
+                                 fc_input_length, actor=True):
     input_layer = kl.Input(shape=obs_input_shape)
 
     width, height, depth = conv_input_shape
@@ -89,10 +106,13 @@ def create_vision_and_fc_actor(obs_input_shape, conv_sizes, fc_sizes, last_fc_si
 
     concat = kl.Concatenate(axis=-1)([flatten, fc])
     out = MLP(last_fc_sizes, num_outputs, (None, None))(concat)
-    return DiscreteActor(inputs=input_layer, outputs=[out])
+    if actor:
+        return DiscreteActor(inputs=input_layer, outputs=[out])
+    else:
+        return kr.Model(inputs=input_layer, outputs=[out])
 
 
-def create_model(input_shape, conv_sizes, fc_sizes, num_outputs):
+def create_global_critic(input_shape, conv_sizes, fc_sizes, num_outputs):
     num_outputs = num_outputs
     rows, cols, depth = input_shape
     input_layer = kl.Input(shape=(rows, cols, depth))

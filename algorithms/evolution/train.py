@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from algorithms.evolution.worker import Worker
 from algorithms.evolution.es import CMAES
-from models.base import create_vision_and_fc_actor
+from models.base import create_vision_and_fc_network
 from algorithms.evolution.helpers import load_variables
 from utils.filters import FilterManager, MeanStdFilter
 from envs.bacteria_colony.bacteria_colony import BacteriaColony
@@ -28,7 +28,7 @@ policy_args = {'conv_sizes': [(32, (3, 3), 1), (32, (3, 3), 1)],
                'num_outputs': env.action_space.n,
                'obs_input_shape': env.observation_space.shape}
 
-policy_creator = lambda: create_vision_and_fc_actor(**policy_args)
+policy_creator = lambda: create_vision_and_fc_network(**policy_args)
 po = policy_creator()
 rollouts_per_group = 1
 popsize = 20
