@@ -16,7 +16,7 @@ import ray
 from utils.misc import Timer, SpeciesSampler, SpeciesSamplerManager
 from utils.filters import FilterManager, MeanStdFilter
 from utils.coma_helper import get_states_actions_for_locs
-from utils.metrics import get_kl_metric, entropy, get_r2score, EarlyStoppingKL
+from utils.metrics import get_kl_metric, entropy, get_coma_r2score, EarlyStoppingKL
 from algorithms.coma.sampler import Sampler
 
 
@@ -56,8 +56,9 @@ class MultiAgentCOMATrainer:
         self.ac_creator = ac_creator
 
         kl = get_kl_metric(self.env.action_space.n)
-        r2score = get_r2score(self.env.action_space.n)
+        r2score = get_coma_r2score(self.env.action_space.n)
         self.actor_callbacks = [EarlyStoppingKL(self.target_kl)]
+
         self.ac = ac_creator()
         self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss,
                                metrics=[r2score])

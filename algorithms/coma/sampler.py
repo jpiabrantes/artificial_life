@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 
 from utils.filters import MeanStdFilter
-from utils.buffers import EntityBuffer, EpStats
+from utils.buffers import COMABuffer, EpStats
 from utils.coma_helper import get_states_actions_for_locs
 from utils.misc import SpeciesSampler
 
@@ -179,8 +179,8 @@ class Sampler:
             if agent_name not in agent_name_ac:
                 species_index = agent_name_to_species_index_fn(agent_name)
                 agent_name_ac[agent_name] = species_ac_map[species_index]
-                agent_buffers[agent_name] = EntityBuffer(self.env.longevity, self.env.observation_space,
-                                                         self.env.action_space, self.gamma, self.lamb)
+                agent_buffers[agent_name] = COMABuffer(self.env.longevity, self.env.observation_space,
+                                                       self.env.action_space, self.gamma, self.lamb)
             ac_name = agent_name_ac[agent_name]
             agent = self.env.agents[agent_name]
             ac_info[ac_name]['locs'].append((agent.row, agent.col))
