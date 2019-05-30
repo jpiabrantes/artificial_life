@@ -172,7 +172,9 @@ class Sampler:
                 ac_name = ac_names[j]
                 species_ac_map[species_index] = ac_name
                 # TODO: allow to have shared weights and non-shared weights
-                self.acs[ac_name].set_weights(ray.get(weight_id_list[species_index]))
+                weights = ray.get(weight_id_list[species_index])
+                self.acs[ac_name].actor.set_weights(weights.actor)
+                self.acs[ac_name].critic.set_weights(weights.critic)
                 j += 1
         return species_ac_map
 
