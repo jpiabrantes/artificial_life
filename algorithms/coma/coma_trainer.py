@@ -3,7 +3,7 @@
 #TODO: document
 #TODO: rename agents to entities
 '''
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 import os
 import pickle
 from datetime import datetime
@@ -18,6 +18,9 @@ from utils.filters import FilterManager, MeanStdFilter
 from utils.coma_helper import get_states_actions_for_locs_and_dna
 from utils.metrics import get_kl_metric, entropy, get_coma_r2score, EarlyStoppingKL
 from algorithms.coma.sampler import Sampler
+
+
+Weights = namedtuple('Weights', ('actor', 'critic'))
 
 
 class MultiAgentCOMATrainer:
@@ -80,7 +83,7 @@ class MultiAgentCOMATrainer:
         else:
             weights, species_sampler = self._create_generation(generation)
             episodes, training_samples = 0, 0
-        weights = [w.copy() for w in weights]
+        target_weights = [w.critic.copy() for w in weights]
         weights_id_list = [ray.put(w) for w in weights]
 
         species_trained_epochs = defaultdict(int)
@@ -100,7 +103,9 @@ class MultiAgentCOMATrainer:
                 obs, act, adv, td, old_log_probs, pi, states_actions = variables
                 if len(obs) < self.batch_size:
                     continue
-                for var, w in zip(self.ac.variables, weights[species_index]):
+                for var, w in zip(self.ac.actor.variables, weights[species_index].actor):
+                    var.load(w)
+                for var, w in zip(self.ac.critic.variables, weights[species_index].critic):
                     var.load(w)
                 processed_species.append(species_index)
 
@@ -125,8 +130,12 @@ class MultiAgentCOMATrainer:
                     r2score = result.history['r2score'][-1]
 
                 species_trained_epochs[species_index] += 1
-                weights[species_index] = self.ac.get_weights()
-                weights_id_list[species_index] = ray.put(weights[species_index])
+                if not (species_trained_epochs[species_index] % self.update_target_freq):
+                    target_weights[species_index] = self.ac.critic.get_weights()
+                    print('Updated target weights!')
+                weights[species_index] = Weights(actor=self.ac.actor.get_weights(), critic=self.ac.critic.get_weights())
+                weights_id_list[species_index] = ray.put(Weights(weights[species_index].actor,
+                                                                 target_weights[species_index]))
                 checkpoint_path = os.path.join(generation_folder, str(species_index), str(episodes))
                 self.ac.save_weights(checkpoint_path)
 
@@ -211,7 +220,7 @@ class MultiAgentCOMATrainer:
         episodes, collected_samples = 0, 0
         weights = []
         if generation == 0:
-            weights = [self.ac.get_weights()]*self.population_size
+            weights = [Weights(self.ac.actor.get_weights(), self.ac.critic.get_weights())]*self.population_size
             for species_index in range(self.population_size):
                 species_folder = os.path.join(generation_folder, str(species_index))
                 os.makedirs(species_folder)
