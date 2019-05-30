@@ -43,14 +43,14 @@ class GameRenderer:
 
 
 class PolicyRenderer:
-    def __init__(self, surface, g_struct):
-        self.g_struct = g_struct
+    def __init__(self, surface, g_variables):
+        self.g_variables = g_variables
         self.margin = 10
         width, height = surface.get_size()
         self.surface = surface.subsurface(self.margin, self.margin, width-2*self.margin, height-2*self.margin)
         self.width, self.height = self.surface.get_size()
-        self.down_arrow = pygame.image.load(os.path.join('UI', 'assets', 'down_arrow.png'))
-        self.still = pygame.image.load(os.path.join('UI', 'assets', 'still.png'))
+        self.down_arrow = pygame.image.load(os.path.join('assets', 'down_arrow.png'))
+        self.still = pygame.image.load(os.path.join('assets', 'still.png'))
         self.background = self._build_background()
 
     def _build_background(self):
@@ -70,17 +70,17 @@ class PolicyRenderer:
         return self.surface.copy()
 
     def render(self, iter_):
-        dict_ = self.g_struct.dicts[iter_]
+        dict_ = self.g_variables.dicts[iter_]
         self.surface.blit(self.background, (0, 0))
-        action_probs = dict_['agents'][self.g_struct.following_agent_id]['action_probs']
+        action_probs = dict_['agents'][self.g_variables.following_agent_id]['action_probs']
         surfaces = [FONT.render('%.1f%%' % (prob*100), True, (0, 0, 0)) for prob in action_probs]
         widths = [surf.get_width() for surf in surfaces]
         [self.surface.blit(surf, (x-width/2, self.y)) for surf, width, x in zip(surfaces, widths, self.x_centers)]
 
 
 class BacteriaAttributeRenderer:
-    def __init__(self, surface, g_struct):
-        self.g_struct = g_struct
+    def __init__(self, surface, g_variables):
+        self.g_variables = g_variables
         self.margin = 10
         width, height = surface.get_size()
         self.surface = surface.subsurface(self.margin, self.margin, width-2*self.margin, height-2*self.margin)
@@ -88,27 +88,26 @@ class BacteriaAttributeRenderer:
         self.background = surface.copy()
 
     def render(self, iter_):
-        dict_ = self.g_struct.dicts[iter_]
+        env = self.g_variables.env
+        dict_ = self.g_variables.dicts[iter_]
         self.surface.blit(self.background, (0, 0))
 
         # title
-        followed_surf = TITLE_FONT.render('Following %s' % self.g_struct.following_agent_id, True, (0, 0, 0))
+        followed_surf = TITLE_FONT.render('Following %s' % self.g_variables.following_agent_id, True, (0, 0, 0))
         self.surface.blit(followed_surf, (0, 0))
         population_surf = TITLE_FONT.render('Total population: %d' % len(dict_['agents']), True, (0, 0, 0))
         self.surface.blit(population_surf, (self.width-population_surf.get_width(), 0))
 
         # Attributes
         state = dict_['state']
-        agent_dict = dict_['agents'][self.g_struct.following_agent_id]
+        agent_dict = dict_['agents'][self.g_variables.following_agent_id]
 
-        mask = (state[:, :, 1] > 0)
-        kinship_grid = state[:, :, 4] == agent_dict['dna']
-        total_kinship = np.sum(kinship_grid)
-        agent_dict['kinship'] = total_kinship
-        agent_dict['weighted_family_wealth'] = np.sum(kinship_grid[mask] * state[mask, 3])
+        agent_dict['family_size'] = np.sum(state[:, :, env.State.DNA] == agent_dict['dna'])
+        agent_dict['total_population'] = np.sum(state[:, :, env.State.AGENTS])
+        agent_dict['iter'] = iter_
 
-        labels = ['Age', 'Sugar', 'Total kinship', 'Weighted family wealth']
-        keys = ['age', 'sugar', 'kinship', 'weighted_family_wealth']
+        labels = ['Iteration', 'Age', 'Sugar', 'Family size', 'Total population']
+        keys = ['iter', 'age', 'sugar', 'family_size', 'total_population']
 
         # render labels
         label_surfaces = [FONT.render(label, True, (0, 0, 0)) for label in labels]
@@ -136,7 +135,7 @@ class BacteriaAttributeRenderer:
             x += width
 
 
-class ValueFunctionRenderer:
+class FamilyRenderer:
     def __init__(self, surface, g_struct):
         self.g_struct = g_struct
         self.margin = 10
@@ -144,20 +143,35 @@ class ValueFunctionRenderer:
         self.surface = surface.subsurface(self.margin, self.margin, width-2*self.margin, height-2*self.margin)
         self.width, self.height = self.surface.get_size()
         self.background = self.surface.copy()
+        self.family_sizes = self._compute_family_sizes()
+        self.fig, self.axs, self.line = None, None, None
+        self.colors = [(200, 0, 0), (0, 0, 200), (0, 100, 100), (0, 0, 0), (200, 200, 200)]
+        self.colors = [np.array(c, np.float32)/255 for c in self.colors]
+
+    def _compute_family_sizes(self):
+        env = self.g_struct.env
+        n_iters = len(self.g_struct.dicts)
+        n_families = len(np.unique(self.g_struct.dicts[0]['state'][..., env.State.DNA]))-1
+        family_sizes = np.empty((n_families, n_iters), np.int)
+        for i in range(n_iters):
+            state = self.g_struct.dicts[i]['state']
+            for dna in range(1, n_families+1):
+                family_sizes[dna-1, i] = np.sum(state[..., env.State.DNA] == dna)
+        return family_sizes
 
     def render(self, iter_):
         self.surface.blit(self.background, (0, 0))
-        agent_id = self.g_struct.following_agent_id
-        vf = [np.nan if agent_id not in dict_['agents'] else dict_['agents'][agent_id]['vf']
-              for dict_ in self.g_struct.dicts[:iter_]]
-        fig, axs = plt.subplots(figsize=(self.width//DPI, self.height//DPI))
-        axs.plot(vf)
-        axs.set_xlabel('Time step')
-        axs.set_ylabel('VF estimate')
-        fig.tight_layout()
-        fig.canvas.draw()
-        pygame.surfarray.blit_array(self.surface, pygame.surfarray.blit_array(self.surface, fig2rgb(fig, self.width, self.height)))
-        plt.close(fig)
+        if self.fig is None:
+            self.fig, self.axs = plt.subplots(figsize=(self.width // DPI, self.height // DPI))
+            self.axs.stackplot(np.arange(self.family_sizes.shape[1]), self.family_sizes, colors=self.colors)
+            self.line = self.axs.axvline(x=iter_)
+            self.axs.set_xlim([0, self.family_sizes.shape[1]])
+            self.axs.set_ylabel('Family sizes')
+        else:
+            self.line.set_xdata(iter_)
+        self.fig.tight_layout()
+        self.fig.canvas.draw()
+        pygame.surfarray.blit_array(self.surface, fig2rgb(self.fig, self.width, self.height))
 
 
 def fig2rgb(fig, width, height):
