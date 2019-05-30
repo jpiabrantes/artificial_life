@@ -29,11 +29,13 @@ class COMABuffer:
         self.log_probs_buf = np.empty(size, dtype=np.float32)
         self.pi_buf = np.empty((size, action_space.n), dtype=np.float32)
         self.loc_buf = np.empty((size, 2), dtype=np.int32)
+        self.dna_buf = np.empty(size, dtype=np.int32)
         self.td_buf = np.empty(size, dtype=np.int32)
+        self.ind_buf = np.empty((size, 2), dtype=np.int32)
         self.path_start_idx, self.ptr, self.max_size = 0, 0, size
         self.gamma, self.lamb = gamma, lamb
 
-    def store(self, obs, act, rew, val, adv, log_p, pi, loc):
+    def store(self, obs, act, rew, val, adv, log_p, pi, loc, dna, ind):
         """
         Append one timestep of agent-environment interaction to the buffer.
         """
@@ -46,6 +48,8 @@ class COMABuffer:
         self.log_probs_buf[self.ptr] = log_p
         self.pi_buf[self.ptr] = pi
         self.loc_buf[self.ptr] = loc
+        self.dna_buf[self.ptr] = dna
+        self.ind_buf[self.ptr] = ind
         self.ptr += 1
 
     def finnish_path(self, last_value):
@@ -85,7 +89,8 @@ class COMABuffer:
         to_idx = self.ptr
         self.ptr, self.path_start_idx = 0, 0
         return (self.obs_buf[:to_idx], self.act_buf[:to_idx], self.adv_buf[:to_idx], self.td_buf[:to_idx],
-                self.log_probs_buf[:to_idx], self.loc_buf[:to_idx], self.pi_buf[:to_idx])
+                self.log_probs_buf[:to_idx], self.loc_buf[:to_idx], self.pi_buf[:to_idx], self.dna_buf[:to_idx],
+                self.ind_buf[:to_idx])
 
 
 class PPOBuffer:

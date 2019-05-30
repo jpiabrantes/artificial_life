@@ -15,7 +15,7 @@ import ray
 
 from utils.misc import Timer, SpeciesSampler, SpeciesSamplerManager
 from utils.filters import FilterManager, MeanStdFilter
-from utils.coma_helper import get_states_actions_for_locs
+from utils.coma_helper import get_states_actions_for_locs_and_dna
 from utils.metrics import get_kl_metric, entropy, get_coma_r2score, EarlyStoppingKL
 from algorithms.coma.sampler import Sampler
 
@@ -90,13 +90,13 @@ class MultiAgentCOMATrainer:
             samples_this_iter = 0
             with Timer() as sampling_time:
                 results_list = ray.get([worker.rollout.remote(weights_id_list) for worker in self.samplers])
-            self._concatenate_samplers_results(results_list, species_buffers)
+            global_buffer = self._concatenate_samplers_results(results_list, species_buffers)
             self.filter_manager.synchronize(self.filters, self.samplers)
             self.species_sampler_manager.synchronize(species_sampler, self.samplers)
             pi_optimisation_time, v_optimisation_time, pop_stats = [], [], []
             processed_species = []
             for species_index, variables in species_buffers.items():
-                obs, act, adv, td, old_log_probs, loc, pi, raw_state_action_per_iter, samples_per_iter = variables
+                obs, act, adv, td, old_log_probs, loc, pi, dna, ind = variables
                 if len(obs) < self.batch_size:
                     continue
                 for var, w in zip(self.ac.variables, weights[species_index]):
@@ -115,16 +115,15 @@ class MultiAgentCOMATrainer:
                     old_entropy = result.history['entropy'][0]
                     kl = result.history['kl'][-1]
 
-                states_actions = np.empty((len(loc),) + raw_state_action_per_iter.shape[1:])
-                ptr = 0
-                for samples, raw_state_action in zip(samples_per_iter, raw_state_action_per_iter):
-                    states_actions[ptr: ptr+samples] = get_states_actions_for_locs(raw_state_action,
-                                                                                   loc[ptr: ptr+samples],
-                                                                                   self.env.n_rows, self.env.n_cols)
-                    for i in range(samples):
-                        states_actions[ptr+i][..., :-1] = self.filters['CriticObsFilter']\
-                            (states_actions[ptr+i][..., :-1], update=False)
-                    ptr += samples
+                states_actions = np.empty((len(loc),) + global_buffer[tuple(ind[0])][0].shape)
+                for i in range(len(loc)):
+                    # TODO: group together samples with the same state-action
+                    raw_state_action = global_buffer[tuple(ind[i])][0]
+                    raw_state_action = get_states_actions_for_locs_and_dna(raw_state_action, [loc[i]],
+                                                                           [dna[i]], self.env.n_rows, self.env.n_cols,
+                                                                           self.env.State.DNA)[0]
+                    states_actions[i][..., :-1] = self.filters['CriticObsFilter'](raw_state_action[..., :-1],
+                                                                                  update=False)
 
                 act_td = np.concatenate([act[:, None], td[:, None]], axis=-1)
                 with Timer() as v_optimisation_timer:
@@ -268,42 +267,37 @@ class MultiAgentCOMATrainer:
                 log_probs_buf = np.empty(size, dtype=np.float32)
                 loc_buf = np.empty((size, 2), dtype=np.int32)
                 pi_buf = np.empty((size, self.env.action_space.n), dtype=np.float32)
-                buffers[species_index] = [obs_buf, act_buf, adv_buf, td_buf, log_probs_buf, loc_buf, pi_buf]
+                dna_buf = np.empty(size, dtype=np.float32)
+                ind_buf = np.empty((size, 2), dtype=np.float32)
+                buffers[species_index] = [obs_buf, act_buf, adv_buf, td_buf, log_probs_buf, loc_buf, pi_buf, dna_buf,
+                                          ind_buf]
         return buffers
 
-    def _concatenate_samplers_results(self, trajectories_list, ext_species_buffers):
+    def _concatenate_samplers_results(self, results_list, ext_species_buffers):
         """
 
-        :param trajectories_list: list of dictionaries {species_index: [obs, act, adv, td, old_log_probs, loc, pi],
-                                                      'global': [state_action_per_iter, samples_per_iter]}
-        Note: obs dimensions are [n_entities*n_iters, #observation_space.shape]
-            and state_action_per_iter dims are [n_iters, state_action.shape]
-        :return: concatenated_species_buffer (dict) {species_index: [obs, act, adv, td, old_log_probs, loc, pi,
-                                                     state_action_per_iter, samples_per_iter]}
+        :param results_list: [(species_buffers_dict, global_dict), (species_buffers_dict, global_dict)]
         """
-        assert len(trajectories_list) == self.n_workers
+        assert len(results_list) == self.n_workers
+
+        species_dict_list, global_buffers_list = zip(*results_list)
+
         # get sizes for buffers
         sizes_dict = defaultdict(int)
-        for species_buffers in trajectories_list:
-            for species_index, buffers in species_buffers.items():
+        for species_dict in species_dict_list:
+            for species_index, buffers in species_dict.items():
                 sizes_dict[species_index] += len(buffers[0])
         concatenated_bufs_this_iter = self._initialise_buffers(sizes_dict)
 
-        # concatenate along species/global
+        # concatenate along species
         ptr_dict = defaultdict(int)
-        for species_buffers in trajectories_list:
-            for species_index, buffers in species_buffers.items():
+        for species_dict in species_dict_list:
+            for species_index, buffers in species_dict.items():
                 ptr = ptr_dict[species_index]
                 size = len(buffers[0])
                 for buf, result in zip(concatenated_bufs_this_iter[species_index], buffers):
                     buf[ptr:ptr + size] = result
                 ptr_dict[species_index] += size
-
-        # copy the global variables to each specie index
-        for species_index, buffers in concatenated_bufs_this_iter.items():
-            if species_index != 'global':
-                concatenated_bufs_this_iter[species_index].extend(concatenated_bufs_this_iter['global'])
-        del concatenated_bufs_this_iter['global']
 
         # concatenate with species buffers
         for species_index, buffers in concatenated_bufs_this_iter.items():
@@ -312,3 +306,8 @@ class MultiAgentCOMATrainer:
                                                       zip(ext_species_buffers[species_index], buffers)]
             else:
                 ext_species_buffers[species_index] = buffers
+
+        global_buffer = {}
+        for dict_ in global_buffers_list:
+            global_buffer.update(dict_)
+        return global_buffer
