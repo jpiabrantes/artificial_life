@@ -122,7 +122,8 @@ class MultiAgentCOMATrainer:
                                                                                    loc[ptr: ptr+samples],
                                                                                    self.env.n_rows, self.env.n_cols)
                     for i in range(samples):
-                        states_actions[ptr+i] = self.filters['CriticObsFilter'](states_actions[ptr+i], update=False)
+                        states_actions[ptr+i][..., :-1] = self.filters['CriticObsFilter']\
+                            (states_actions[ptr+i][..., :-1], update=False)
                     ptr += samples
 
                 act_td = np.concatenate([act[:, None], td[:, None]], axis=-1)

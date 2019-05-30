@@ -25,7 +25,7 @@ lamb = 0.8  # lambda for TD(lambda)
 seed = 0
 sample_batch_size = 260
 batch_size = 250
-entropy_coeff = 0.01
+entropy_coeff = 0.02
 population_size = 1
 
 # parallelism
@@ -36,7 +36,7 @@ ray.init(local_mode=DEBUG)
 # actor critic
 actor_args = {'conv_sizes': [(32, (3, 3), 1), (32, (3, 3), 1)],
               'obs_input_shape': env.observation_space.shape,
-              'fc_sizes': [32],
+              'fc_sizes': [16],
               'last_fc_sizes': [32],
               'conv_input_shape': env.actor_terrain_obs_shape,
               'fc_input_length': np.prod(env.observation_space.shape) - np.prod(env.actor_terrain_obs_shape),
@@ -44,7 +44,7 @@ actor_args = {'conv_sizes': [(32, (3, 3), 1), (32, (3, 3), 1)],
 
 rows, cols, depth = env.critic_observation_shape
 depth += 1  # will give state-actions
-critic_args = {'conv_sizes': [(32, (2, 2), 1), (32, (2, 2), 1), (16, (2, 2), 1)],
+critic_args = {'conv_sizes': [(32, (2, 2), 1), (16, (2, 2), 1), (8, (2, 2), 1)],
                'fc_sizes': [64, 32],
                'input_shape': (rows, cols, depth),
                'num_outputs': env.action_space.n}
