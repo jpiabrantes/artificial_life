@@ -70,7 +70,6 @@ class Sampler:
         while not done_sampling:
             if not self.in_an_episode:
                 self.in_an_episode = True
-            global_ind = (self.index, global_iteration)
             global_raw_obs = raw_obs_dict['state']
             del raw_obs_dict['state']
 
@@ -109,7 +108,7 @@ class Sampler:
                     if agent_name in done_dict:
                         buf, rew = agent_buffers[agent_name], reward_dict[agent_name]
                         ep_ret += rew
-                        buf.store(obs, action, rew, val, adv, log_prob, pi, loc, dna, global_ind)
+                        buf.store(obs, action, rew, val, adv, log_prob, pi, loc, dna, global_iteration)
                         if done_dict[agent_name]:  # if entity died
                             kinship_map = self.env.get_kinship_map(agent_name)
                             if np.any(kinship_map > 0):
@@ -125,7 +124,7 @@ class Sampler:
                         elif done_sampling:
                             buf.finnish_path(val)
 
-            global_dict[global_ind] = [raw_state_action, len(reward_dict)]
+            global_dict[global_iteration] = [raw_state_action, len(reward_dict)]
             global_iteration += 1
             if done_dict['__all__']:
                 # update vars

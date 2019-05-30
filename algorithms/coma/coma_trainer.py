@@ -90,13 +90,13 @@ class MultiAgentCOMATrainer:
             samples_this_iter = 0
             with Timer() as sampling_time:
                 results_list = ray.get([worker.rollout.remote(weights_id_list) for worker in self.samplers])
-            global_buffer = self._concatenate_samplers_results(results_list, species_buffers)
+            self._concatenate_samplers_results(results_list, species_buffers)
             self.filter_manager.synchronize(self.filters, self.samplers)
             self.species_sampler_manager.synchronize(species_sampler, self.samplers)
             pi_optimisation_time, v_optimisation_time, pop_stats = [], [], []
             processed_species = []
             for species_index, variables in species_buffers.items():
-                obs, act, adv, td, old_log_probs, loc, pi, dna, ind = variables
+                obs, act, adv, td, old_log_probs, pi, states_actions = variables
                 if len(obs) < self.batch_size:
                     continue
                 for var, w in zip(self.ac.variables, weights[species_index]):
@@ -114,16 +114,6 @@ class MultiAgentCOMATrainer:
                     old_policy_loss = result.history['loss'][0]
                     old_entropy = result.history['entropy'][0]
                     kl = result.history['kl'][-1]
-
-                states_actions = np.empty((len(loc),) + global_buffer[tuple(ind[0])][0].shape)
-                for i in range(len(loc)):
-                    # TODO: group together samples with the same state-action
-                    raw_state_action = global_buffer[tuple(ind[i])][0]
-                    raw_state_action = get_states_actions_for_locs_and_dna(raw_state_action, [loc[i]],
-                                                                           [dna[i]], self.env.n_rows, self.env.n_cols,
-                                                                           self.env.State.DNA)[0]
-                    states_actions[i][..., :-1] = self.filters['CriticObsFilter'](raw_state_action[..., :-1],
-                                                                                  update=False)
 
                 act_td = np.concatenate([act[:, None], td[:, None]], axis=-1)
                 with Timer() as v_optimisation_timer:
@@ -252,31 +242,25 @@ class MultiAgentCOMATrainer:
 
     def _initialise_buffers(self, sizes_dict):
         buffers = {}
+        obs_shape = list(self.env.critic_observation_shape)
+        obs_shape[-1] += 1
         for species_index, size in sizes_dict.items():
-            if species_index == 'global':
-                obs_shape = list(self.env.critic_observation_shape)
-                obs_shape[-1] += 1
-                state_action_buf = np.empty((size,) + tuple(obs_shape), dtype=np.float32)
-                samples_buf = np.empty(size, dtype=np.int32)
-                buffers[species_index] = [state_action_buf, samples_buf]
-            else:
-                obs_buf = np.empty((size,) + self.env.observation_space.shape, dtype=np.float32)
-                act_buf = np.empty((size,) + self.env.action_space.shape, dtype=np.int32)
-                adv_buf = np.empty(size, dtype=np.float32)
-                td_buf = np.empty(size, dtype=np.float32)
-                log_probs_buf = np.empty(size, dtype=np.float32)
-                loc_buf = np.empty((size, 2), dtype=np.int32)
-                pi_buf = np.empty((size, self.env.action_space.n), dtype=np.float32)
-                dna_buf = np.empty(size, dtype=np.float32)
-                ind_buf = np.empty((size, 2), dtype=np.float32)
-                buffers[species_index] = [obs_buf, act_buf, adv_buf, td_buf, log_probs_buf, loc_buf, pi_buf, dna_buf,
-                                          ind_buf]
+            obs_buf = np.empty((size,) + self.env.observation_space.shape, dtype=np.float32)
+            act_buf = np.empty((size,) + self.env.action_space.shape, dtype=np.int32)
+            adv_buf = np.empty(size, dtype=np.float32)
+            td_buf = np.empty(size, dtype=np.float32)
+            log_probs_buf = np.empty(size, dtype=np.float32)
+            pi_buf = np.empty((size, self.env.action_space.n), dtype=np.float32)
+            state_action_buf = np.empty((size,) + tuple(obs_shape), dtype=np.float32)
+            buffers[species_index] = [obs_buf, act_buf, adv_buf, td_buf, log_probs_buf, pi_buf, state_action_buf]
         return buffers
 
     def _concatenate_samplers_results(self, results_list, ext_species_buffers):
         """
 
         :param results_list: [(species_buffers_dict, global_dict), (species_buffers_dict, global_dict)]
+
+        global_buffer: {(worker.index, iter.index): [state_action, number of samples]}
         """
         assert len(results_list) == self.n_workers
 
@@ -291,11 +275,29 @@ class MultiAgentCOMATrainer:
 
         # concatenate along species
         ptr_dict = defaultdict(int)
-        for species_dict in species_dict_list:
+        for species_dict, global_buffer in zip(species_dict_list, global_buffers_list):
             for species_index, buffers in species_dict.items():
                 ptr = ptr_dict[species_index]
                 size = len(buffers[0])
-                for buf, result in zip(concatenated_bufs_this_iter[species_index], buffers):
+                buf_indices = np.arange(ptr, ptr+size)
+                state_action_buf = concatenated_bufs_this_iter[species_index][-1]
+
+                # remove locs, inds and dnas from the buffers and
+                # pre_process state_actions
+                buffers, (locs, dnas, inds) = buffers[:-3], buffers[-3:]
+                unique_inds = np.unique(inds)
+                for ind in unique_inds:
+                    mask = inds == ind
+                    buf_indices_to_fill = buf_indices[mask]
+                    raw_state_action, n_samples = global_buffer[ind]
+                    assert np.sum(mask) == n_samples, "n_samples doesnt match samples received"
+                    raw_states_actions = get_states_actions_for_locs_and_dna(raw_state_action, locs[mask], dnas[mask],
+                                                                             self.env.n_rows, self.env.n_cols,
+                                                                             self.env.State.DNA)
+                    for buf_index, raw_state_action in zip(buf_indices_to_fill, raw_states_actions):
+                        state_action_buf[buf_index][..., :-1] = self.filters['CriticObsFilter']\
+                            (raw_state_action[..., :-1], update=False)
+                for buf, result in zip(concatenated_bufs_this_iter[species_index][:-1], buffers):
                     buf[ptr:ptr + size] = result
                 ptr_dict[species_index] += size
 
@@ -306,8 +308,3 @@ class MultiAgentCOMATrainer:
                                                       zip(ext_species_buffers[species_index], buffers)]
             else:
                 ext_species_buffers[species_index] = buffers
-
-        global_buffer = {}
-        for dict_ in global_buffers_list:
-            global_buffer.update(dict_)
-        return global_buffer

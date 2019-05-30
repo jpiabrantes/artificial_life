@@ -31,7 +31,7 @@ class COMABuffer:
         self.loc_buf = np.empty((size, 2), dtype=np.int32)
         self.dna_buf = np.empty(size, dtype=np.int32)
         self.td_buf = np.empty(size, dtype=np.int32)
-        self.ind_buf = np.empty((size, 2), dtype=np.int32)
+        self.ind_buf = np.empty(size, dtype=np.int32)
         self.path_start_idx, self.ptr, self.max_size = 0, 0, size
         self.gamma, self.lamb = gamma, lamb
 
@@ -89,7 +89,7 @@ class COMABuffer:
         to_idx = self.ptr
         self.ptr, self.path_start_idx = 0, 0
         return (self.obs_buf[:to_idx], self.act_buf[:to_idx], self.adv_buf[:to_idx], self.td_buf[:to_idx],
-                self.log_probs_buf[:to_idx], self.loc_buf[:to_idx], self.pi_buf[:to_idx], self.dna_buf[:to_idx],
+                self.log_probs_buf[:to_idx], self.pi_buf[:to_idx], self.loc_buf[:to_idx], self.dna_buf[:to_idx],
                 self.ind_buf[:to_idx])
 
 
