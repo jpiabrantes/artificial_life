@@ -107,13 +107,13 @@ class MultiAgentCOMATrainer:
                     adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-8)
 
                 act_adv_logs = np.concatenate([act[:, None], adv[:, None], old_log_probs[:, None]], axis=-1)
-                with Timer() as pi_optimisation_timer:
-                    result = self.ac.actor.fit(obs, act_adv_logs, batch_size=self.batch_size, shuffle=True,
-                                               epochs=self.train_pi_iters, verbose=False,
-                                               callbacks=self.actor_callbacks)
-                    old_policy_loss = result.history['loss'][0]
-                    old_entropy = result.history['entropy'][0]
-                    kl = result.history['kl'][-1]
+                # with Timer() as pi_optimisation_timer:
+                #     result = self.ac.actor.fit(obs, act_adv_logs, batch_size=self.batch_size, shuffle=True,
+                #                                epochs=self.train_pi_iters, verbose=False,
+                #                                callbacks=self.actor_callbacks)
+                #     old_policy_loss = result.history['loss'][0]
+                #     old_entropy = result.history['entropy'][0]
+                #     kl = result.history['kl'][-1]
 
                 states_actions = np.empty((len(loc),) + state_action_per_iter.shape[1:])
                 ptr = 0
@@ -139,42 +139,42 @@ class MultiAgentCOMATrainer:
 
                 samples_this_iter += len(obs)
                 training_samples += len(obs)
-                pi_optimisation_time += [pi_optimisation_timer.interval]
-                v_optimisation_time += [v_optimisation_timer.interval]
-                key_value_pairs = [('LossQ', old_value_loss), ('deltaQLoss', old_value_loss-value_loss),
-                                   ('Old R2 score', old_r2score),
-                                   ('R2 score', r2score),
-                                   ('KL', kl), ('Old entropy', old_entropy), ('LossPi', old_policy_loss),
-                                   ('TD(lambda)', np.mean(td))]
-                pop_stats.append({'%s_%s' % (species_index, k): v for k, v in key_value_pairs})
+                # pi_optimisation_time += [pi_optimisation_timer.interval]
+                # v_optimisation_time += [v_optimisation_timer.interval]
+                # key_value_pairs = [('LossQ', old_value_loss), ('deltaQLoss', old_value_loss-value_loss),
+                #                    ('Old R2 score', old_r2score),
+                #                    ('R2 score', r2score),
+                #                    ('KL', kl), ('Old entropy', old_entropy), ('LossPi', old_policy_loss),
+                #                    ('TD(lambda)', np.mean(td))]
+                # pop_stats.append({'%s_%s' % (species_index, k): v for k, v in key_value_pairs})
 
-            for species_index in processed_species:
-                del species_buffers[species_index]
-
-            # get ep_stats from samplers
-            ep_metrics = self._concatenate_ep_stats(ray.get([s.get_ep_stats.remote() for s in self.samplers]))
-
-            episodes += ep_metrics['EpisodesThisIter']
-            ep_metrics.update({'Episodes Sampled': episodes, 'Training Samples': training_samples,
-                               'Sampling time': sampling_time.interval,
-                               'Pi optimisation time': np.sum(pi_optimisation_time),
-                               'V optimisation time': np.sum(v_optimisation_time),
-                               'Samples this iter': samples_this_iter})
-            if ep_metrics['EpisodesThisIter']:
-                for stats in pop_stats:
-                    ep_metrics.update(stats)
-
-            print('Epoch: ', epoch)
-            with train_summary_writer.as_default():
-                for k, v in ep_metrics.items():
-                    print(k, v)
-                    tf.summary.scalar(k, v, step=episodes)
-
-            if epoch % save_freq == save_freq - 1:
-                with open(os.path.join(generation_folder, 'variables.pkl'), 'wb') as f:
-                    pickle.dump((self.filters, species_sampler, episodes, training_samples), f)
-                print('Saved variables!')
-            print('\n' * 2)
+            # for species_index in processed_species:
+            #     del species_buffers[species_index]
+            #
+            # # get ep_stats from samplers
+            # ep_metrics = self._concatenate_ep_stats(ray.get([s.get_ep_stats.remote() for s in self.samplers]))
+            #
+            # episodes += ep_metrics['EpisodesThisIter']
+            # ep_metrics.update({'Episodes Sampled': episodes, 'Training Samples': training_samples,
+            #                    'Sampling time': sampling_time.interval,
+            #                    'Pi optimisation time': np.sum(pi_optimisation_time),
+            #                    'V optimisation time': np.sum(v_optimisation_time),
+            #                    'Samples this iter': samples_this_iter})
+            # if ep_metrics['EpisodesThisIter']:
+            #     for stats in pop_stats:
+            #         ep_metrics.update(stats)
+            #
+            # print('Epoch: ', epoch)
+            # with train_summary_writer.as_default():
+            #     for k, v in ep_metrics.items():
+            #         print(k, v)
+            #         tf.summary.scalar(k, v, step=episodes)
+            #
+            # if epoch % save_freq == save_freq - 1:
+            #     with open(os.path.join(generation_folder, 'variables.pkl'), 'wb') as f:
+            #         pickle.dump((self.filters, species_sampler, episodes, training_samples), f)
+            #     print('Saved variables!')
+            # print('\n' * 2)
 
     @staticmethod
     def _concatenate_ep_stats(stats_list, min_and_max=False, include_std=False):
