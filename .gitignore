@@ -1,6 +1,4 @@
-algorithms/evolution/checkpoints/*
-checkpoints/*
-examples/checkpoints/*
+checkpoints/
 .idea
 
 # Byte-compiled / optimized / DLL files

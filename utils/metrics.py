@@ -17,7 +17,7 @@ def entropy(acts_advs_logs, logits):
     return tf.reduce_mean(-tf.reduce_sum(tf.where(probs == 0., tf.zeros_like(probs), probs * all_log_probs), axis=1))
 
 
-def get_r2score(n_actions):
+def get_coma_r2score(n_actions):
     def r2score(acts_tds, qs):
         # a trick to input actions and td(lambda) through same API
         actions, y = [tf.squeeze(v) for v in tf.split(acts_tds, 2, axis=-1)]
@@ -27,6 +27,12 @@ def get_r2score(n_actions):
         unexplained_error = tf.reduce_sum(tf.square(y - prediction))
         return 1 - unexplained_error/total_error
     return r2score
+
+
+def r2score(y, y_hat):
+    total_error = tf.reduce_sum(tf.square(y - tf.reduce_mean(y)))
+    unexplained_error = tf.reduce_sum(tf.square(y - y_hat))
+    return 1 - unexplained_error/total_error
 
 
 # CALLBACKS
