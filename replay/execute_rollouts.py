@@ -23,7 +23,7 @@ policy_args = {'conv_sizes': [(32, (3, 3), 1), (32, (3, 3), 1)],
                'obs_input_shape': env.observation_space.shape}
 policy_creator = lambda: create_vision_and_fc_network(**policy_args)
 
-exp_name = 'MultiPPO'
+exp_name = 'EvolutionStrategies'
 
 if exp_name == 'EvolutionStrategies':
     last_generation, mu0_list, stds_list, horizons_list, returns_list, filters = load_variables(env)

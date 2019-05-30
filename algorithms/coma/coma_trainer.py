@@ -7,6 +7,7 @@ from collections import defaultdict, namedtuple
 import os
 import pickle
 from datetime import datetime
+from time import time
 
 import numpy as np
 import tensorflow as tf
@@ -77,7 +78,7 @@ class MultiAgentCOMATrainer:
 
     def train(self, epochs, generation, save_freq=10):
         generation_folder = './checkpoints/{}/{}'.format(self.env.name, generation)
-        tensorboard_folder = os.path.join(generation_folder, 'tensorboard')
+        tensorboard_folder = os.path.join(generation_folder, 'tensorboard', 'coma_%d' % time())
         if os.path.isdir(generation_folder):
             weights, self.filters, species_sampler, episodes, training_samples = self._load_generation(generation)
         else:
