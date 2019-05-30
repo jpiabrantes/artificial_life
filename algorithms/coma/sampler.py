@@ -132,15 +132,16 @@ class Sampler:
                 episodes_sampled += 1
 
                 # show results to species sampler
-                species_results = defaultdict(list)
-                for species_index, result in zip(species_indices, info_dict['founders_results']):
-                    species_results[species_index].append(result)
-                self.species_sampler.show_results(species_indices, info_dict['founders_results'])
+                # species_results = defaultdict(list)
+                # for species_index, result in zip(species_indices, info_dict['founders_results']):
+                #     species_results[species_index].append(result)
+                # self.species_sampler.show_results(species_indices, info_dict['founders_results'])
+                self.species_sampler.show_results(species_indices, [1]*len(species_indices))
 
                 # gather episode metrics
                 stats = {'ep_len': ep_len, 'ep_ret': ep_ret}
                 stats.update(info_dict['__all__'])
-                stats.update({'%s_survivers' % i: np.mean(r) for i, r in species_results.items()})
+                # stats.update({'%s_survivers' % i: np.mean(r) for i, r in species_results.items()})
                 self.ep_stats.add(stats)
 
                 # concat entities buffers into species buffers

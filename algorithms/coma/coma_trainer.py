@@ -106,7 +106,6 @@ class MultiAgentCOMATrainer:
 
                 if self.normalize_advantages:
                     adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-8)
-
                 act_adv_logs = np.concatenate([act[:, None], adv[:, None], old_log_probs[:, None]], axis=-1)
                 with Timer() as pi_optimisation_timer:
                     result = self.ac.actor.fit(obs, act_adv_logs, batch_size=self.batch_size, shuffle=True,
@@ -298,8 +297,6 @@ class MultiAgentCOMATrainer:
                     for buf_index, raw_state_action in zip(buf_indices_to_fill, raw_states_actions):
                         state_action_buf[buf_index][..., :-1] = self.filters['CriticObsFilter']\
                             (raw_state_action[..., :-1], update=False)
-                        if raw_state_action[50//2, 50//2, self.env.State.AGE] == 0:
-                            print(raw_state_action[50//2, 50//2, self.env.State.AGE])
                 for buf, result in zip(concatenated_bufs_this_iter[species_index][:-1], buffers):
                     buf[ptr:ptr + size] = result
                 ptr_dict[species_index] += size

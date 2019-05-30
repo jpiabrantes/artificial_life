@@ -16,7 +16,9 @@ generation = 0
 epochs = 5000
 
 # env
-env_creator = lambda: BacteriaColony(env_default_config)
+config = env_default_config.copy()
+config['greedy_reward'] = True
+env_creator = lambda: BacteriaColony(config)
 env = env_creator()
 
 # algorithm
