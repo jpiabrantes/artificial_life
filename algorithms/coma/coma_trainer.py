@@ -90,8 +90,9 @@ class MultiAgentCOMATrainer:
             samples_this_iter = 0
             with Timer() as sampling_time:
                 results_list = ray.get([worker.rollout.remote(weights_id_list) for worker in self.samplers])
-            self._concatenate_samplers_results(results_list, species_buffers)
             self.filter_manager.synchronize(self.filters, self.samplers)
+            self._concatenate_samplers_results(results_list, species_buffers)
+
             self.species_sampler_manager.synchronize(species_sampler, self.samplers)
             pi_optimisation_time, v_optimisation_time, pop_stats = [], [], []
             processed_species = []
@@ -289,14 +290,16 @@ class MultiAgentCOMATrainer:
                 for ind in unique_inds:
                     mask = inds == ind
                     buf_indices_to_fill = buf_indices[mask]
-                    raw_state_action, n_samples = global_buffer[ind]
+                    g_raw_state_action, n_samples = global_buffer[ind]
                     assert np.sum(mask) == n_samples, "n_samples doesnt match samples received"
-                    raw_states_actions = get_states_actions_for_locs_and_dna(raw_state_action, locs[mask], dnas[mask],
+                    raw_states_actions = get_states_actions_for_locs_and_dna(g_raw_state_action, locs[mask], dnas[mask],
                                                                              self.env.n_rows, self.env.n_cols,
                                                                              self.env.State.DNA)
                     for buf_index, raw_state_action in zip(buf_indices_to_fill, raw_states_actions):
                         state_action_buf[buf_index][..., :-1] = self.filters['CriticObsFilter']\
                             (raw_state_action[..., :-1], update=False)
+                        if raw_state_action[50//2, 50//2, self.env.State.AGE] == 0:
+                            print(raw_state_action[50//2, 50//2, self.env.State.AGE])
                 for buf, result in zip(concatenated_bufs_this_iter[species_index][:-1], buffers):
                     buf[ptr:ptr + size] = result
                 ptr_dict[species_index] += size
