@@ -1,9 +1,8 @@
 from copy import deepcopy
-from collections import defaultdict
 from time import time
 
 import numpy as np
-from cv2 import cvtColor, COLOR_HSV2RGB
+# from cv2 import cvtColor, COLOR_HSV2RGB
 from gym.spaces import Box, Discrete
 
 from utils.map import create_tiles_1
@@ -11,6 +10,7 @@ from utils.misc import Enum, MeanTracker, Timer
 
 State = Enum(('SUGAR', 'AGENTS', 'AGE', 'AGENT_SUGAR', 'DNA'))
 Terrain = Enum(('SUGAR', 'AGENTS', 'AGE', 'AGENT_SUGAR', 'KINSHIP'))
+DNA_COLORS = {1: (200, 0, 0), 2: (0, 0, 200), 3: (0, 100, 100), 4: (0, 0, 0), 5: (255, 255, 255)}
 
 
 class BacteriaColony:
@@ -25,6 +25,7 @@ class BacteriaColony:
         self.n_cols = config['n_cols']
         self.sugar_growth_rate = config['sugar_growth_rate']
 
+        self.greedy_reward = config['greedy_reward']
         self.n_agents = config['n_agents']
         self.birth_endowment = config['birth_endowment']
         self.metabolism = config['metabolism']
@@ -58,6 +59,7 @@ class BacteriaColony:
         self.surplus = None
         self.life_expectancy = None
         self.dna_total_score = None
+        self.average_population = None
 
     @staticmethod
     def seed(seed=None):
@@ -72,8 +74,11 @@ class BacteriaColony:
 
         :return: obs (dict): New observations for each ready agent.
         """
+        if species_indices is None:
+            species_indices = list(range(self.n_agents))
         Agent.id = 1
         self.babies_born = 0
+        self.average_population = MeanTracker()
         self.dna_total_score = [0]*self.n_agents
         self.surplus = MeanTracker()
         self.life_expectancy = MeanTracker()
@@ -122,6 +127,8 @@ class BacteriaColony:
                 agent = self.agents[agent_name]
                 self.agent_dna[agent_name] = agent.dna
                 newborn, harvest, died = agent.step(action, self.n_rows, self.n_cols, self.tiles)
+                if self.greedy_reward:
+                    reward_dict[agent_name] = harvest
                 if newborn:
                     self.babies_born += 1
                 if died:
@@ -133,7 +140,8 @@ class BacteriaColony:
                     done_dict[agent_name] = False
         self.timers['move'].add_value(move_timer.interval)
 
-        # Compute surplus stat. #TODO: remove this. Collect stats in callbacks
+        # Compute surplus stat
+        self.average_population.add_value(len(self.agents))
         # Which tiles would feed another agent
         mask = self._state[:, :, Terrain.SUGAR] > self.metabolism
         # For how many iters would they feed the current population?
@@ -145,23 +153,26 @@ class BacteriaColony:
             obs_dict = self._generate_observations()
         self.timers['observe'].add_value(observe_timer.interval)
 
-        # compute a reward for every agent that sent an action
-        dna_results = np.zeros((self.n_agents,), np.int)
-        dnas, counts = np.unique(dna_map[dna_map != 0], return_counts=True)
-        for dna, count in zip(dnas, counts):
-            dna_results[int(dna) - 1] = count
-            self.dna_total_score[int(dna) - 1] += count
-        for agent_name, dna in self.agent_dna.items():
-            reward_dict[agent_name] = dna_results[agent.dna - 1]
+        if not self.greedy_reward:
+            # compute a reward for every agent that sent an action
+            dna_results = np.zeros((self.n_agents,), np.int)
+            dnas, counts = np.unique(dna_map[dna_map != 0], return_counts=True)
+            for dna, count in zip(dnas, counts):
+                dna_results[int(dna) - 1] = count
+                self.dna_total_score[int(dna) - 1] += count
+            for agent_name, dna in self.agent_dna.items():
+                reward_dict[agent_name] = dna_results[agent.dna - 1]
 
         # Check termination
         self.iter += 1
         if (len(self.agents) == 0) or (self.iter == self.max_iters):
             done_dict['__all__'] = True
             info_dict['__all__'] = {'surplus': self.surplus.mean, 'babies_born': self.babies_born,
-                                    'survivors': len(self.agents), 'life_expectancy': self.life_expectancy.mean}
-            info_dict['founders_results'] = dna_results
-            info_dict['founders_total_results'] = self.dna_total_score
+                                    'survivors': len(self.agents), 'life_expectancy': self.life_expectancy.mean,
+                                    'average_population': self.average_population.mean}
+            if not self.greedy_reward:
+                info_dict['founders_results'] = dna_results
+                info_dict['founders_total_results'] = self.dna_total_score
         else:
             done_dict['__all__'] = False
 
@@ -172,18 +183,17 @@ class BacteriaColony:
             state = self._state
         if mode == 'rgb_array':
             # agents
-            a_hsv = np.zeros((self.n_rows, self.n_cols, 3), np.float32)
-            mask = state[:, :, State.AGENTS] > 0
-            a_hsv[mask, 0] = 180
-            a_hsv[mask, 1] = 0
-            a_hsv[mask, 2] = 0.5
-            a_rgb = cvtColor(a_hsv, COLOR_HSV2RGB)
+            a_rgb = np.zeros((self.n_rows, self.n_cols, 3), np.float32)
+            for dna in range(1, 6):
+                mask = state[:, :, State.DNA] == dna
+                a_rgb[mask, :] = np.array(DNA_COLORS[dna], dtype=np.float32)/255.
 
             # sugar
             dirt = np.array((120., 72, 0)) / 255
             grass = np.array((85., 168, 74)) / 255
             norm_sugar = (state[:, :, State.SUGAR]/self.max_capacity)[..., None]
             s_rgb = norm_sugar*grass+(1-norm_sugar)*dirt
+            mask = state[..., State.AGENTS] > 0
             s_rgb[mask] = a_rgb[mask]
             return s_rgb
         else:
