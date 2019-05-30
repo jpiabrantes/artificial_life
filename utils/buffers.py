@@ -30,7 +30,7 @@ class COMABuffer:
         self.pi_buf = np.empty((size, action_space.n), dtype=np.float32)
         self.loc_buf = np.empty((size, 2), dtype=np.int32)
         self.dna_buf = np.empty(size, dtype=np.int32)
-        self.td_buf = np.empty(size, dtype=np.int32)
+        self.td_buf = np.empty(size, dtype=np.float32)
         self.ind_buf = np.empty(size, dtype=np.int32)
         self.path_start_idx, self.ptr, self.max_size = 0, 0, size
         self.gamma, self.lamb = gamma, lamb
