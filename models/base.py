@@ -78,21 +78,17 @@ class PPOActorCritic(kr.Model):
     def __init__(self, network_args, num_actions):
         super().__init__('ppo_ac')
         self.actor = create_vision_and_fc_network(**network_args, num_outputs=num_actions)
-        self.critic = create_vision_and_fc_network(**network_args, num_outputs=num_actions, actor=False)
+        self.critic = create_vision_and_fc_network(**network_args, num_outputs=1, actor=False)
 
     def call(self, inputs):
         return self.actor(inputs), self.critic(inputs)
 
     def action_value_logprobs(self, obs):
-        logits, qs = self.predict(obs)
+        logits, value = self.predict(obs)
         actions = self.actor.action_dist.predict(logits)
-        pi = scipy.special.softmax(logits, axis=1)
-        values = np.sum(pi*qs, axis=-1)
-        q = qs[np.arange(len(actions)), actions]
-        advs = q - values
-        all_log_probs = np.log(pi)
+        all_log_probs = np.log(scipy.special.softmax(logits, axis=1))
         log_probs = all_log_probs[np.arange(len(actions)), actions]
-        return actions, values, log_probs, advs
+        return actions, np.squeeze(value, axis=-1), log_probs
 
 
 def create_vision_and_fc_network(obs_input_shape, conv_sizes, fc_sizes, last_fc_sizes, num_outputs, conv_input_shape,
@@ -125,13 +121,13 @@ def create_global_critic(input_shape, conv_sizes, fc_sizes, num_outputs):
     one_hot = kl.Lambda(lambda x: tf.one_hot(tf.cast(x, 'int32'), num_outputs),
                         input_shape=(rows, cols))(actions)
     concat = kl.Concatenate(axis=-1)([non_actions, tf.reshape(one_hot, (-1, rows, cols, num_outputs))])
-    # vision_layer = concat
-    # for i, (filters, kernel, stride) in enumerate(conv_sizes):
-    #     vision_layer = kl.Conv2D(filters, kernel, stride, activation='relu')(vision_layer)
-    #     vision_layer = kl.MaxPool2D(pool_size=(2, 2))(vision_layer)
+    vision_layer = concat
+    for i, (filters, kernel, stride) in enumerate(conv_sizes):
+        vision_layer = kl.Conv2D(filters, kernel, stride, activation='relu')(vision_layer)
+        # vision_layer = kl.MaxPool2D(pool_size=(2, 2))(vision_layer)
 
-    # flatten = kl.Flatten()(vision_layer)
-    flatten = kl.Flatten()(concat)
+    flatten = kl.Flatten()(vision_layer)
+    # flatten = kl.Flatten()(concat)
     dense = MLP(fc_sizes, num_outputs, (None, None))(flatten)
     return kr.Model(inputs=input_layer, outputs=[dense])
 
