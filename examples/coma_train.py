@@ -15,7 +15,7 @@ if not EAGER:
 generation = 0
 epochs = 5000
 save_freq = 30
-load = True
+load = False
 
 # env
 config = env_default_config.copy()
@@ -27,7 +27,7 @@ env = env_creator()
 gamma = 0.95
 lamb = 0.8  # lambda for TD(lambda)
 seed = 0
-sample_batch_size = 260*5
+sample_batch_size = 300*5
 batch_size = 250
 entropy_coeff = 0.02
 population_size = 5
