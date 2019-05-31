@@ -45,6 +45,7 @@ class MultiAgentCOMATrainer:
         self.target_kl = target_kl
         self.population_size = population_size
 
+        self.algorithm_folder = os.path.dirname(os.path.abspath(__file__))
         self.filter_manager = FilterManager()
         self.species_sampler_manager = SpeciesSamplerManager()
 
@@ -77,12 +78,12 @@ class MultiAgentCOMATrainer:
                                         population_size, normalise_observation) for i in range(n_workers)]
 
     def train(self, epochs, generation, load=False):
-        generation_folder = './checkpoints/{}/{}'.format(self.env.name, generation)
+        generation_folder = os.path.join(self.algorithm_folder, self.env.name, str(generation))
         tensorboard_folder = os.path.join(generation_folder, 'tensorboard', 'coma_%d' % time())
         if load:
-             weights, self.filters, species_sampler, episodes, training_samples = self._load_generation(generation)
+            weights, self.filters, species_sampler, episodes, training_samples = self._load_generation(generation_folder)
         else:
-            weights, species_sampler = self._create_generation(generation)
+            weights, species_sampler = self._create_generation(generation_folder, generation)
             episodes, training_samples = 0, 0
         target_weights = [w.critic.copy() for w in weights]
         weights_id_list = [ray.put(w) for w in weights]
@@ -140,6 +141,7 @@ class MultiAgentCOMATrainer:
                 if (species_trained_epochs[species_index] % self.save_freq) == self.save_freq - 1 or epoch == epochs-1:
                     checkpoint_path = os.path.join(generation_folder, str(species_index), str(episodes))
                     self.ac.save_weights(checkpoint_path)
+                    print('Weights of species {} saved!'.format(species_index))
 
                 samples_this_iter += len(obs)
                 training_samples += len(obs)
@@ -201,8 +203,7 @@ class MultiAgentCOMATrainer:
                     metrics['Std_' + k] = np.std(v)
         return metrics
 
-    def _load_generation(self, generation):
-        generation_folder = './checkpoints/{}/{}'.format(self.env.name, generation)
+    def _load_generation(self, generation_folder):
         pickle_path = os.path.join(generation_folder, 'variables.pkl')
         with open(pickle_path, 'rb') as f:
             filters, species_sampler, episodes, training_samples = pickle.load(f)
@@ -211,11 +212,10 @@ class MultiAgentCOMATrainer:
             species_folder = os.path.join(generation_folder, str(species_index))
             checkpoint_path = tf.train.latest_checkpoint(species_folder)
             self.ac.load_weights(checkpoint_path)
-            weights[species_index] = self.ac.get_weights()
+            weights[species_index] = Weights(self.ac.actor.get_weights(), self.ac.critic.get_weights())
         return weights, filters, species_sampler, episodes, training_samples
 
-    def _create_generation(self, generation):
-        generation_folder = './checkpoints/{}/{}'.format(self.env.name, generation)
+    def _create_generation(self, generation_folder, generation):
         tensorboard_folder = os.path.join(generation_folder, 'tensorboard', datetime.now().strftime("%m-%d-%Y_%H-%M-%S"))
         os.makedirs(generation_folder, exist_ok=True)
         os.makedirs(tensorboard_folder, exist_ok=True)
