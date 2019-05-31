@@ -63,12 +63,13 @@ class MultiAgentCOMATrainer:
         kl = get_kl_metric(self.env.action_space.n)
         r2score = get_coma_explained_variance(self.env.action_space.n)
         self.actor_callbacks = [EarlyStoppingKL(self.target_kl)]
-
-        self.ac = ac_creator()
-        self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss,
-                               metrics=[r2score])
-        self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss,
-                              metrics=[kl, entropy])
+        mirrored_strategy = tf.distribute.MirroredStrategy()
+        with mirrored_strategy.scope():
+            self.ac = ac_creator()
+            self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss,
+                                   metrics=[r2score])
+            self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss,
+                                  metrics=[kl, entropy])
 
         self.steps_per_worker = sample_batch_size // n_workers
         if sample_batch_size % n_workers:

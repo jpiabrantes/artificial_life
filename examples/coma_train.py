@@ -1,6 +1,7 @@
 import ray
 import tensorflow as tf
 import numpy as np
+from multiprocessing import cpu_count
 
 from envs.bacteria_colony.bacteria_colony import BacteriaColony
 from envs.bacteria_colony.env_config import env_default_config
@@ -35,6 +36,7 @@ update_target_freq = 1
 
 # parallelism
 n_workers = 5
+assert n_workers <= cpu_count(), 'Number of workers is too high'
 DEBUG = n_workers == 1
 ray.init(local_mode=DEBUG)
 
