@@ -5,7 +5,6 @@
 from collections import defaultdict
 import os
 import pickle
-from datetime import datetime
 from time import time
 
 import numpy as np
