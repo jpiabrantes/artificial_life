@@ -131,9 +131,9 @@ class MultiAgentCOMATrainer:
                     explained_variance = result.history['explained_variance'][-1]
 
                 species_trained_epochs[species_index] += 1
-                # if not (species_trained_epochs[species_index] % self.update_target_freq):
-                target_weights[species_index] = self.ac.critic.get_weights()
-                    # print('Updated target weights!')
+                if not (species_trained_epochs[species_index] % self.update_target_freq):
+                    target_weights[species_index] = self.ac.critic.get_weights()
+                    print('Updated target weights!')
                 weights[species_index] = Weights(actor=self.ac.actor.get_weights(), critic=self.ac.critic.get_weights())
                 weights_id_list[species_index] = ray.put(Weights(weights[species_index].actor,
                                                                  target_weights[species_index]))
