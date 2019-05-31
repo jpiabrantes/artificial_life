@@ -17,7 +17,7 @@ import ray
 from utils.misc import Timer, SpeciesSampler, SpeciesSamplerManager
 from utils.filters import FilterManager, MeanStdFilter
 from utils.coma_helper import get_states_actions_for_locs_and_dna
-from utils.metrics import get_kl_metric, entropy, get_coma_r2score, EarlyStoppingKL
+from utils.metrics import get_kl_metric, entropy, get_coma_explained_variance, EarlyStoppingKL
 from algorithms.coma.sampler import Sampler
 
 
@@ -60,7 +60,7 @@ class MultiAgentCOMATrainer:
         self.ac_creator = ac_creator
 
         kl = get_kl_metric(self.env.action_space.n)
-        r2score = get_coma_r2score(self.env.action_space.n)
+        r2score = get_coma_explained_variance(self.env.action_space.n)
         self.actor_callbacks = [EarlyStoppingKL(self.target_kl)]
 
         self.ac = ac_creator()
@@ -76,14 +76,14 @@ class MultiAgentCOMATrainer:
         self.samplers = [Sampler.remote(self.steps_per_worker, gamma, lamb, env_creator, ac_creator, i,
                                         population_size, normalise_observation) for i in range(n_workers)]
 
-    def train(self, epochs, generation, save_freq=10):
+    def train(self, epochs, generation, load=False):
         generation_folder = './checkpoints/{}/{}'.format(self.env.name, generation)
         tensorboard_folder = os.path.join(generation_folder, 'tensorboard', 'coma_%d' % time())
-        # if os.path.isdir(generation_folder):
-        #     weights, self.filters, species_sampler, episodes, training_samples = self._load_generation(generation)
-        # else:
-        weights, species_sampler = self._create_generation(generation)
-        episodes, training_samples = 0, 0
+        if load:
+             weights, self.filters, species_sampler, episodes, training_samples = self._load_generation(generation)
+        else:
+            weights, species_sampler = self._create_generation(generation)
+            episodes, training_samples = 0, 0
         target_weights = [w.critic.copy() for w in weights]
         weights_id_list = [ray.put(w) for w in weights]
 
@@ -127,13 +127,13 @@ class MultiAgentCOMATrainer:
                                                 verbose=False, epochs=self.train_v_iters)
                     old_value_loss = result.history['loss'][0]
                     value_loss = result.history['loss'][-1]
-                    old_r2score = result.history['r2score'][0]
-                    r2score = result.history['r2score'][-1]
+                    old_explained_variance = result.history['explained_variance'][0]
+                    explained_variance = result.history['explained_variance'][-1]
 
                 species_trained_epochs[species_index] += 1
-                if not (species_trained_epochs[species_index] % self.update_target_freq):
-                    #target_weights[species_index] = self.ac.critic.get_weights()
-                    print('Updated target weights!')
+                # if not (species_trained_epochs[species_index] % self.update_target_freq):
+                target_weights[species_index] = self.ac.critic.get_weights()
+                    # print('Updated target weights!')
                 weights[species_index] = Weights(actor=self.ac.actor.get_weights(), critic=self.ac.critic.get_weights())
                 weights_id_list[species_index] = ray.put(Weights(weights[species_index].actor,
                                                                  target_weights[species_index]))
@@ -145,8 +145,8 @@ class MultiAgentCOMATrainer:
                 pi_optimisation_time += [pi_optimisation_timer.interval]
                 v_optimisation_time += [v_optimisation_timer.interval]
                 key_value_pairs = [('LossQ', old_value_loss), ('deltaQLoss', old_value_loss-value_loss),
-                                   ('Old R2 score', old_r2score),
-                                   ('R2 score', r2score),
+                                   ('Old Explained Variance', old_explained_variance),
+                                   ('Explained variance', explained_variance),
                                    ('KL', kl), ('Old entropy', old_entropy), ('LossPi', old_policy_loss),
                                    ('TD(lambda)', np.mean(td))]
                 pop_stats.append({'%s_%s' % (species_index, k): v for k, v in key_value_pairs})
@@ -173,7 +173,7 @@ class MultiAgentCOMATrainer:
                     print(k, v)
                     tf.summary.scalar(k, v, step=episodes)
 
-            if epoch % save_freq == save_freq - 1:
+            if epoch % self.save_freq == self.save_freq - 1:
                 with open(os.path.join(generation_folder, 'variables.pkl'), 'wb') as f:
                     pickle.dump((self.filters, species_sampler, episodes, training_samples), f)
                 print('Saved variables!')
@@ -307,6 +307,7 @@ class MultiAgentCOMATrainer:
                     for buf_index, raw_state_action in zip(buf_indices_to_fill, raw_states_actions):
                         state_action_buf[buf_index][..., :-1] = self.filters['CriticObsFilter']\
                             (raw_state_action[..., :-1], update=False)
+                        state_action_buf[buf_index][..., -1] = raw_state_action[..., -1]
                 for buf, result in zip(concatenated_bufs_this_iter[species_index][:-1], buffers):
                     buf[ptr:ptr + size] = result
                 ptr_dict[species_index] += size

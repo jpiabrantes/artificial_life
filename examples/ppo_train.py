@@ -32,7 +32,7 @@ entropy_coeff = 0.01
 population_size = 1
 
 # parallelism
-n_workers = 5
+n_workers = 1
 DEBUG = n_workers == 1
 ray.init(local_mode=DEBUG)
 

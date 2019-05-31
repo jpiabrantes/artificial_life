@@ -16,7 +16,7 @@ import ray
 from utils.buffers import PPOBuffer, EpStats
 from utils.filters import FilterManager, MeanStdFilter, apply_filters
 from utils.misc import Timer
-from utils.metrics import get_kl_metric, entropy, r2score, EarlyStoppingKL
+from utils.metrics import get_kl_metric, entropy, explained_variance, EarlyStoppingKL
 
 
 @ray.remote(num_cpus=1)
@@ -202,7 +202,7 @@ class MultiAgentPPOTrainer:
         for ac_name, ac_creator in ac_creators.items():
             ac = ac_creator()
             ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss,
-                              metrics=[r2score])
+                              metrics=[explained_variance])
             ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss,
                              metrics=[kl, entropy])
             self.acs[ac_name] = ac
@@ -252,14 +252,15 @@ class MultiAgentPPOTrainer:
                                                verbose=False, shuffle=True)
                         old_value_loss = result.history['loss'][0]
                         value_loss = result.history['loss'][-1]
-                        old_r2score = result.history['r2score'][0]
-                        r2score = result.history['r2score'][-1]
+                        old_explained_variance = result.history['explained_variance'][0]
+                        explained_variance = result.history['explained_variance'][-1]
 
                     samples_this_iter += len(obs)
                     pi_optimisation_time += pi_optimisation_timer.interval
                     v_optimisation_time += v_optimisation_timer.interval
                     key_value_pairs = [('LossV', old_value_loss), ('DeltaVLoss', old_value_loss-value_loss),
-                                       ('R2 score', r2score), ('Old R2 score', old_r2score),
+                                       ('Explained variance', explained_variance),
+                                       ('Old explained variance', old_explained_variance),
                                        ('KL', kl), ('Entropy', old_entropy), ('LossPi', old_policy_loss)]
                     ac_stats.append({'%s_%s' % (ac_name, k): v for k, v in key_value_pairs})
 

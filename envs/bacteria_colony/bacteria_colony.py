@@ -40,7 +40,7 @@ class BacteriaColony:
 
         vision = config['vision']
         assert type(vision) is int, 'Vision needs to be an integer'
-        assert vision < min(self.n_rows//2, self.n_cols//2), "Vision cant be larger than half the grid world"
+        #assert vision < min(self.n_rows//2, self.n_cols//2), "Vision cant be larger than half the grid world"
         self.vision = vision
 
         self.action_space = Discrete(5)
@@ -250,8 +250,9 @@ class BacteriaColony:
         locations = set()
         for i in range(self.n_agents):
             while True:
-                row = np.random.randint(-10, 11)
-                col = self.n_cols//2 + int(np.round(np.sqrt(100-row**2)))*np.random.choice((-1, 1))
+                # TODO: change this initialisation
+                row = np.random.randint(-1, 2)
+                col = self.n_cols//2 + int(np.round(np.sqrt(4-row**2)))*np.random.choice((-1, 1))
                 row += self.n_rows//2
                 if (row, col) not in locations:
                     locations.add((row, col))

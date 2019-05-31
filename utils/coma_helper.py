@@ -13,7 +13,7 @@ def get_states_actions_for_locs_and_dna(state_action, locs, dnas, n_rows, n_cols
 
 
 def _center_state_action_on_loc(state_action, row, col, n_rows, n_cols):
-    rows = np.mod(row-(np.arange(n_rows) - n_rows//2), n_rows)
-    cols = np.mod(col-(np.arange(n_cols) - n_cols//2), n_cols)
+    rows = np.mod(row+(np.arange(n_rows) - n_rows//2), n_rows)
+    cols = np.mod(col+(np.arange(n_cols) - n_cols//2), n_cols)
     indices = np.ix_(rows, cols)
     return state_action[indices]
