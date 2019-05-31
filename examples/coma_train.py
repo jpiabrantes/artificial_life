@@ -22,7 +22,7 @@ env_creator = lambda: BacteriaColony(config)
 env = env_creator()
 
 # algorithm
-gamma = 0.99
+gamma = 0.95
 lamb = 0.8  # lambda for TD(lambda)
 seed = 0
 sample_batch_size = 260
@@ -47,7 +47,7 @@ actor_args = {'conv_sizes': [(32, (3, 3), 1), (32, (3, 3), 1)],
 rows, cols, depth = env.critic_observation_shape
 depth += 1  # will give state-actions
 critic_args = {'conv_sizes': [(32, (2, 2), 1), (16, (2, 2), 1), (8, (2, 2), 1)],
-               'fc_sizes': [64, 32],
+               'fc_sizes': [128, 32],
                'input_shape': (rows, cols, depth),
                'num_outputs': env.action_space.n}
 
@@ -58,5 +58,5 @@ ac_creator = lambda: COMAActorCritic(**ac_kwarg)
 trainer = MultiAgentCOMATrainer(env_creator, ac_creator, population_size, seed=seed, gamma=gamma, lamb=lamb,
                                 n_workers=n_workers, batch_size=batch_size, normalise_observation=True,
                                 sample_batch_size=sample_batch_size, entropy_coeff=entropy_coeff,
-                                normalise_advantages=False, update_target_freq=10)
+                                normalise_advantages=False, update_target_freq=30)
 trainer.train(epochs, generation)
