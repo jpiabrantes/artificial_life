@@ -14,6 +14,8 @@ if not EAGER:
 # training session
 generation = 0
 epochs = 5000
+save_freq = 30
+load = True
 
 # env
 config = env_default_config.copy()
@@ -25,14 +27,14 @@ env = env_creator()
 gamma = 0.95
 lamb = 0.8  # lambda for TD(lambda)
 seed = 0
-sample_batch_size = 260
+sample_batch_size = 260*5
 batch_size = 250
 entropy_coeff = 0.02
-population_size = 1
-update_target_freq = 10
+population_size = 5
+update_target_freq = 1
 
 # parallelism
-n_workers = 1
+n_workers = 5
 DEBUG = n_workers == 1
 ray.init(local_mode=DEBUG)
 
@@ -59,5 +61,5 @@ ac_creator = lambda: COMAActorCritic(**ac_kwarg)
 trainer = MultiAgentCOMATrainer(env_creator, ac_creator, population_size, seed=seed, gamma=gamma, lamb=lamb,
                                 n_workers=n_workers, batch_size=batch_size, normalise_observation=True,
                                 sample_batch_size=sample_batch_size, entropy_coeff=entropy_coeff,
-                                normalise_advantages=False, update_target_freq=update_target_freq)
-trainer.train(epochs, generation)
+                                normalise_advantages=False, update_target_freq=update_target_freq, save_freq=save_freq)
+trainer.train(epochs, generation, load=load)

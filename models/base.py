@@ -124,10 +124,8 @@ def create_global_critic(input_shape, conv_sizes, fc_sizes, num_outputs):
     vision_layer = concat
     for i, (filters, kernel, stride) in enumerate(conv_sizes):
         vision_layer = kl.Conv2D(filters, kernel, stride, activation='relu')(vision_layer)
-        # vision_layer = kl.MaxPool2D(pool_size=(2, 2))(vision_layer)
 
     flatten = kl.Flatten()(vision_layer)
-    # flatten = kl.Flatten()(concat)
     dense = MLP(fc_sizes, num_outputs, (None, None))(flatten)
     return kr.Model(inputs=input_layer, outputs=[dense])
 
