@@ -60,7 +60,8 @@ class Sampler:
                                                              ('species_indices', 'raw_obs_dict', 'ep_ret', 'ep_len')]
             species_ac_map = self._load_species(species_indices, weight_id_list)
         else:  # new episode
-            species_indices = self.species_sampler.sample(self.n_acs)
+            # species_indices = self.species_sampler.sample(self.n_acs)
+            species_indices = list(range(self.env.n_agents))
             species_ac_map = self._load_species(species_indices, weight_id_list)
             raw_obs_dict, done_dict, ep_ret, ep_len, = self.env.reset(species_indices), {'__all__': False}, 0, 0
 
@@ -136,7 +137,6 @@ class Sampler:
                 # for species_index, result in zip(species_indices, info_dict['founders_results']):
                 #     species_results[species_index].append(result)
                 # self.species_sampler.show_results(species_indices, info_dict['founders_results'])
-                self.species_sampler.show_results(species_indices, [1]*len(species_indices))
 
                 # gather episode metrics
                 stats = {'ep_len': ep_len, 'ep_ret': ep_ret}
@@ -148,7 +148,8 @@ class Sampler:
                 self._collect_entity_buffers_into_species_buffers(agent_buffers, species_buffers)
 
                 if not done_sampling:
-                    species_indices = self.species_sampler.sample(self.n_acs)
+                    # species_indices = self.species_sampler.sample(self.n_acs)
+                    species_indices = list(range(self.env.n_agents))
                     species_ac_map = self._load_species(species_indices, weight_id_list)
                     raw_obs_dict, done_dict, ep_ret, ep_len, = self.env.reset(species_indices), {'__all__': False}, 0, 0
                     agent_name_ac, agent_buffers = {}, {}
