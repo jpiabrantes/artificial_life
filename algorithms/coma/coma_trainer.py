@@ -137,8 +137,9 @@ class MultiAgentCOMATrainer:
                 weights[species_index] = Weights(actor=self.ac.actor.get_weights(), critic=self.ac.critic.get_weights())
                 weights_id_list[species_index] = ray.put(Weights(weights[species_index].actor,
                                                                  target_weights[species_index]))
-                checkpoint_path = os.path.join(generation_folder, str(species_index), str(episodes))
-                self.ac.save_weights(checkpoint_path)
+                if (species_trained_epochs[species_index] % self.save_freq) == self.save_freq - 1 or epoch == epochs-1:
+                    checkpoint_path = os.path.join(generation_folder, str(species_index), str(episodes))
+                    self.ac.save_weights(checkpoint_path)
 
                 samples_this_iter += len(obs)
                 training_samples += len(obs)
@@ -173,7 +174,7 @@ class MultiAgentCOMATrainer:
                     print(k, v)
                     tf.summary.scalar(k, v, step=episodes)
 
-            if epoch % self.save_freq == self.save_freq - 1:
+            if epoch % self.save_freq == self.save_freq - 1 or epoch == epochs-1:
                 with open(os.path.join(generation_folder, 'variables.pkl'), 'wb') as f:
                     pickle.dump((self.filters, species_sampler, episodes, training_samples), f)
                 print('Saved variables!')
