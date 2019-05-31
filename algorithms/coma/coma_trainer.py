@@ -78,7 +78,7 @@ class MultiAgentCOMATrainer:
                                         population_size, normalise_observation) for i in range(n_workers)]
 
     def train(self, epochs, generation, load=False):
-        generation_folder = os.path.join(self.algorithm_folder, self.env.name, str(generation))
+        generation_folder = os.path.join(self.algorithm_folder, 'checkpoints', self.env.name, str(generation))
         tensorboard_folder = os.path.join(generation_folder, 'tensorboard', 'coma_%d' % time())
         if load:
             weights, self.filters, species_sampler, episodes, training_samples = self._load_generation(generation_folder)
@@ -301,7 +301,7 @@ class MultiAgentCOMATrainer:
                     mask = inds == ind
                     buf_indices_to_fill = buf_indices[mask]
                     g_raw_state_action, n_samples = global_buffer[ind]
-                    assert np.sum(mask) == n_samples, "n_samples doesnt match samples received"
+                    # assert np.sum(mask) == n_samples, "n_samples doesnt match samples received"
                     raw_states_actions = get_states_actions_for_locs_and_dna(g_raw_state_action, locs[mask], dnas[mask],
                                                                              self.env.n_rows, self.env.n_cols,
                                                                              self.env.State.DNA)
