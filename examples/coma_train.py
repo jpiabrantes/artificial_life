@@ -28,14 +28,14 @@ env = env_creator()
 gamma = 0.95
 lamb = 0.8  # lambda for TD(lambda)
 seed = 0
-sample_batch_size = 300*5
+sample_batch_size = 300*10
 batch_size = 250
 entropy_coeff = 0.02
-population_size = 5
+population_size = 10
 update_target_freq = 1
 
 # parallelism
-n_workers = 5
+n_workers = 4
 assert n_workers <= cpu_count(), 'Number of workers is too high'
 DEBUG = n_workers == 1
 ray.init(local_mode=DEBUG)
