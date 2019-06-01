@@ -73,11 +73,13 @@ class SpeciesSamplerManager(object):
 
 
 class SpeciesRunningStat:
-    def __init__(self, population_size):
+    def __init__(self, population_size, initial_bias=None):
         self.population_size = population_size
         self.m = np.zeros(population_size)
         self.s = np.zeros(population_size)
         self.n = np.zeros(population_size)
+        if initial_bias is not None:
+            self.show_results(list(range(population_size)), [initial_bias]*population_size)
 
     def show_results(self, species_indices, values):
         for i, value in zip(species_indices, values):
@@ -121,7 +123,7 @@ class SpeciesRunningStat:
 class SpeciesSampler:
     def __init__(self, population_size):
         self.rs = SpeciesRunningStat(population_size)
-        self.buffer = SpeciesRunningStat(population_size)
+        self.buffer = SpeciesRunningStat(population_size, initial_bias=1)
         self._last_sample = None
 
     def show_results(self, species_indices, values):
