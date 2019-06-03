@@ -18,9 +18,9 @@ def entropy(acts_advs_logs, logits):
 
 
 def get_coma_explained_variance(n_actions):
-    def explained_variance(acts_tds, qs):
+    def explained_variance(qtak_acts_tds, qs):
         # a trick to input actions and td(lambda) through same API
-        actions, y = [tf.squeeze(v) for v in tf.split(acts_tds, 2, axis=-1)]
+        _, actions, y = [tf.squeeze(v) for v in tf.split(qtak_acts_tds, 3, axis=-1)]
         prediction = tf.reduce_sum(tf.one_hot(tf.cast(actions, tf.int32), depth=n_actions)*qs, axis=-1)
 
         error = y - prediction

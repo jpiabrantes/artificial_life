@@ -103,13 +103,13 @@ class Sampler:
 
             # store relevant info in the entities buffers
             for ac_name, info in ac_info.items():
-                for agent_name, obs, action, val, log_prob, adv, pi, loc, dna in \
-                        zip(*[info[f] for f in ('agents', 'obs', 'actions', 'vals', 'log_probs', 'advs', 'pis',
+                for agent_name, obs, action, q_tak, log_prob, adv, pi, loc, dna in \
+                        zip(*[info[f] for f in ('agents', 'obs', 'actions', 'q_taken', 'log_probs', 'advs', 'pis',
                                                 'locs', 'dnas')]):
                     if agent_name in done_dict:
                         buf, rew = agent_buffers[agent_name], reward_dict[agent_name]
                         ep_ret += rew
-                        buf.store(obs, action, rew, val, adv, log_prob, pi, loc, dna, global_iteration)
+                        buf.store(obs, action, rew, q_tak, adv, log_prob, pi, loc, dna, global_iteration)
                         if done_dict[agent_name]:  # if entity died
                             kinship_map = self.env.get_kinship_map(agent_name)
                             if np.any(kinship_map > 0):
@@ -123,6 +123,7 @@ class Sampler:
                             # buf.finnish_path(val)
                             buf.finnish_path(0)
                         elif done_sampling:
+                            val = val_map[loc[0], loc[1]]
                             buf.finnish_path(val)
 
             global_dict[global_iteration] = [raw_state_action, len(reward_dict)]
@@ -221,6 +222,7 @@ class Sampler:
             for state_action in states_actions:
                 state_action[..., :-1] = critic_filter(state_action[..., :-1])
             vals, advs = self.acs[ac_name].val_and_adv(states_actions, info['actions'], info['pis'])
+            info['q_taken'] = advs+vals
             info['vals'], info['advs'] = vals, advs
             for val, (row, col) in zip(vals, info['locs']):
                 val_map[row, col] = val
