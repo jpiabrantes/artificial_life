@@ -28,10 +28,11 @@ class MultiAgentCOMATrainer:
     def __init__(self, env_creator, ac_creator, population_size, update_target_freq=30, seed=0, n_workers=1,
                  sample_batch_size=500, batch_size=250, gamma=1., lamb=0.95, clip_ratio=0.2, pi_lr=3e-4, value_lr=1e-3,
                  train_pi_iters=80, train_v_iters=80, target_kl=0.01, save_freq=10, normalise_advantages=False,
-                 normalise_observation=False, entropy_coeff=0.01):
+                 normalise_observation=False, entropy_coeff=0.01, vf_clip_param=10):
         np.random.seed(seed)
         tf.random.set_seed(seed)
 
+        self.vf_clip_param = vf_clip_param
         self.update_target_freq = update_target_freq
         self.entropy_coeff = entropy_coeff
         self.clip_ratio = clip_ratio
@@ -103,7 +104,7 @@ class MultiAgentCOMATrainer:
             pi_optimisation_time, v_optimisation_time, pop_stats = [], [], []
             processed_species = []
             for species_index, variables in species_buffers.items():
-                obs, act, adv, td, old_log_probs, pi, states_actions = variables
+                obs, act, adv, td, old_log_probs, pi, q_tak, states_actions = variables
                 if len(obs) < self.batch_size:
                     continue
                 for var, w in zip(self.ac.actor.variables, weights[species_index].actor):
@@ -123,9 +124,9 @@ class MultiAgentCOMATrainer:
                     old_entropy = result.history['entropy'][0]
                     kl = result.history['kl'][-1]
 
-                act_td = np.concatenate([act[:, None], td[:, None]], axis=-1)
+                qtak_act_td = np.concatenate([q_tak[:, None], act[:, None], td[:, None]], axis=-1)
                 with Timer() as v_optimisation_timer:
-                    result = self.ac.critic.fit(states_actions, act_td, shuffle=True, batch_size=self.batch_size,
+                    result = self.ac.critic.fit(states_actions, qtak_act_td, shuffle=True, batch_size=self.batch_size,
                                                 verbose=False, epochs=self.train_v_iters)
                     old_value_loss = result.history['loss'][0]
                     value_loss = result.history['loss'][-1]
@@ -178,7 +179,7 @@ class MultiAgentCOMATrainer:
                     tf.summary.scalar(k, v, step=episodes)
 
             if epoch % self.save_freq == self.save_freq - 1 or epoch == epochs-1:
-                with open(os.path.join(generation_folder, 'variables.pkl'), 'wb') as f:
+                with open(os.path.join(generation_folder, '%d_variables.pkl' % episodes), 'wb') as f:
                     pickle.dump((self.filters, species_sampler, episodes, training_samples), f)
                 print('Saved variables!')
             print('\n' * 2)
@@ -232,11 +233,16 @@ class MultiAgentCOMATrainer:
         policy_sampler = SpeciesSampler(self.population_size)
         return weights, policy_sampler
 
-    def _value_loss(self, acts_tds, qs):
+    def _value_loss(self, qtak_acts_tds, qs):
         # a trick to input actions and td(lambda) through same API
-        actions, td_lambda = [tf.squeeze(v) for v in tf.split(acts_tds, 2, axis=-1)]
+        old_q_taken, actions, td_lambda = [tf.squeeze(v) for v in tf.split(qtak_acts_tds, 3, axis=-1)]
         q = tf.reduce_sum(tf.one_hot(tf.cast(actions, tf.int32), depth=self.env.action_space.n)*qs, axis=-1)
-        return kr.losses.mean_squared_error(td_lambda, q)
+        loss1 = tf.square(q - td_lambda)
+        q_clipped = old_q_taken + tf.clip_by_value(q - old_q_taken, -self.vf_clip_param, self.vf_clip_param)
+        loss2 = tf.square(q_clipped - td_lambda)
+        loss = tf.maximum(loss1, loss2)
+        mean_loss = tf.reduce_mean(loss)
+        return mean_loss
 
     def _surrogate_loss(self, acts_advs_logs, logits):
         # a trick to input actions and advantages through same API
@@ -263,8 +269,10 @@ class MultiAgentCOMATrainer:
             td_buf = np.empty(size, dtype=np.float32)
             log_probs_buf = np.empty(size, dtype=np.float32)
             pi_buf = np.empty((size, self.env.action_space.n), dtype=np.float32)
+            q_tak_buf = np.empty(size, dtype=np.float32)
             state_action_buf = np.empty((size,) + tuple(obs_shape), dtype=np.float32)
-            buffers[species_index] = [obs_buf, act_buf, adv_buf, td_buf, log_probs_buf, pi_buf, state_action_buf]
+            buffers[species_index] = [obs_buf, act_buf, adv_buf, td_buf, log_probs_buf, pi_buf, q_tak_buf,
+                                      state_action_buf]
         return buffers
 
     def _concatenate_samplers_results(self, results_list, ext_species_buffers):
