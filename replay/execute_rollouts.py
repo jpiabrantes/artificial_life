@@ -3,11 +3,12 @@ import numpy as np
 
 from envs.bacteria_colony.bacteria_colony import BacteriaColony
 from envs.bacteria_colony.env_config import env_default_config
-from models.base import create_vision_and_fc_network
+from models.base import create_vision_and_fc_network, COMAActorCritic
 from replay.rollout import rollout
 
 from algorithms.evolution.helpers import load_variables
 from algorithms.ppo.multi_ppo import load_models_and_filters
+from algorithms.coma.coma_trainer import load_generation
 
 
 # env
@@ -23,8 +24,19 @@ policy_args = {'conv_sizes': [(32, (3, 3), 1), (32, (3, 3), 1)],
                'obs_input_shape': env.observation_space.shape}
 policy_creator = lambda: create_vision_and_fc_network(**policy_args)
 
-exp_name = 'EvolutionStrategies'
+# coma actor-critic
+rows, cols, depth = env.critic_observation_shape
+depth += 1  # will give state-actions
+critic_args = {'conv_sizes': [(32, (2, 2), 1), (16, (2, 2), 1), (4, (2, 2), 1)],
+               'fc_sizes': [128, 32],
+               'input_shape': (rows, cols, depth),
+               'num_outputs': env.action_space.n}
 
+ac_kwarg = {'actor_args': policy_args, 'critic_args': critic_args, 'observation_space': env.observation_space}
+ac_creator = lambda: COMAActorCritic(**ac_kwarg)
+
+
+exp_name = 'COMA'
 if exp_name == 'EvolutionStrategies':
     last_generation, mu0_list, stds_list, horizons_list, returns_list, filters = load_variables(env)
     obs_filter = filters['MeanStdFilter']
@@ -42,6 +54,16 @@ elif exp_name == 'MultiPPO':
     filters = load_models_and_filters(policies, [str(i) for i in species_indices], env, only_actors=True)
     obs_filter = filters['MeanStdFilter']
     policies = {i: a for i, a in zip(species_indices, policies)}
+elif exp_name == 'COMA':
+    ac = ac_creator()
+    weights, filters, species_sampler, episodes, training_samples = load_generation(ac_creator(), env, 0, 10)
+    species_indices = species_sampler.sample(5).tolist()
+    policies = {i: policy_creator() for i in species_indices}
+    for species_index, policy in policies.items():
+        policy.set_weights(weights[species_index].actor)
+    obs_filter = filters['ActorObsFilter']
+    print(policies)
+    print(species_indices)
 else:
     raise Exception()
 

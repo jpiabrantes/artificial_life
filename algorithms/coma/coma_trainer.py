@@ -24,6 +24,22 @@ from algorithms.coma.sampler import Sampler
 Weights = namedtuple('Weights', ('actor', 'critic'))
 
 
+def load_generation(model, env, generation, population_size):
+    # TODO: have a way for only the actor to load the weights
+    algorithm_folder = os.path.dirname(os.path.abspath(__file__))
+    generation_folder = os.path.join(algorithm_folder, 'checkpoints', env.name, str(generation))
+    pickle_path = os.path.join(generation_folder, '3508_variables.pkl')
+    with open(pickle_path, 'rb') as f:
+        filters, species_sampler, episodes, training_samples = pickle.load(f)
+    weights = [None] * population_size
+    for species_index in range(population_size):
+        species_folder = os.path.join(generation_folder, str(species_index))
+        checkpoint_path = tf.train.latest_checkpoint(species_folder)
+        model.load_weights(checkpoint_path)
+        weights[species_index] = Weights(model.actor.get_weights(), model.critic.get_weights())
+    return weights, filters, species_sampler, episodes, training_samples
+
+
 class MultiAgentCOMATrainer:
     def __init__(self, env_creator, ac_creator, population_size, update_target_freq=30, seed=0, n_workers=1,
                  sample_batch_size=500, batch_size=250, gamma=1., lamb=0.95, clip_ratio=0.2, pi_lr=3e-4, value_lr=1e-3,
@@ -83,7 +99,9 @@ class MultiAgentCOMATrainer:
         generation_folder = os.path.join(self.algorithm_folder, 'checkpoints', self.env.name, str(generation))
         tensorboard_folder = os.path.join(generation_folder, 'tensorboard', 'coma_%d' % time())
         if load:
-            weights, self.filters, species_sampler, episodes, training_samples = self._load_generation(generation_folder)
+            weights, self.filters, species_sampler, episodes, training_samples = load_generation(self.ac, self.env,
+                                                                                                 generation,
+                                                                                                 self.population_size)
         else:
             weights, species_sampler = self._create_generation(generation_folder, generation)
             episodes, training_samples = 0, 0
@@ -104,7 +122,7 @@ class MultiAgentCOMATrainer:
             pi_optimisation_time, v_optimisation_time, pop_stats = [], [], []
             processed_species = []
             for species_index, variables in species_buffers.items():
-                obs, act, adv, td, old_log_probs, pi, q_tak, states_actions = variables
+                obs, act, adv, ret, old_log_probs, pi, q_tak, states_actions = variables
                 if len(obs) < self.batch_size:
                     continue
                 for var, w in zip(self.ac.actor.variables, weights[species_index].actor):
@@ -114,7 +132,7 @@ class MultiAgentCOMATrainer:
                 processed_species.append(species_index)
 
                 if self.normalize_advantages:
-                    adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-8)
+                    adv = adv / (np.std(adv) + 1e-8)#(adv - np.mean(adv)) / (np.std(adv) + 1e-8)
                 act_adv_logs = np.concatenate([act[:, None], adv[:, None], old_log_probs[:, None]], axis=-1)
                 with Timer() as pi_optimisation_timer:
                     result = self.ac.actor.fit(obs, act_adv_logs, batch_size=self.batch_size, shuffle=True,
@@ -124,9 +142,9 @@ class MultiAgentCOMATrainer:
                     old_entropy = result.history['entropy'][0]
                     kl = result.history['kl'][-1]
 
-                qtak_act_td = np.concatenate([q_tak[:, None], act[:, None], td[:, None]], axis=-1)
+                qtak_act_ret = np.concatenate([q_tak[:, None], act[:, None], ret[:, None]], axis=-1)
                 with Timer() as v_optimisation_timer:
-                    result = self.ac.critic.fit(states_actions, qtak_act_td, shuffle=True, batch_size=self.batch_size,
+                    result = self.ac.critic.fit(states_actions, qtak_act_ret, shuffle=True, batch_size=self.batch_size,
                                                 verbose=False, epochs=self.train_v_iters)
                     old_value_loss = result.history['loss'][0]
                     value_loss = result.history['loss'][-1]
@@ -153,7 +171,7 @@ class MultiAgentCOMATrainer:
                                    ('Old Explained Variance', old_explained_variance),
                                    ('Explained variance', explained_variance),
                                    ('KL', kl), ('Old entropy', old_entropy), ('LossPi', old_policy_loss),
-                                   ('TD(lambda)', np.mean(td))]
+                                   ('Return', np.mean(ret))]
                 pop_stats.append({'%s_%s' % (species_index, k): v for k, v in key_value_pairs})
 
             for species_index in processed_species:
@@ -205,18 +223,6 @@ class MultiAgentCOMATrainer:
                     metrics['Std_' + k] = np.std(v)
         return metrics
 
-    def _load_generation(self, generation_folder):
-        pickle_path = os.path.join(generation_folder, 'variables.pkl')
-        with open(pickle_path, 'rb') as f:
-            filters, species_sampler, episodes, training_samples = pickle.load(f)
-        weights = [None]*self.population_size
-        for species_index in range(self.population_size):
-            species_folder = os.path.join(generation_folder, str(species_index))
-            checkpoint_path = tf.train.latest_checkpoint(species_folder)
-            self.ac.load_weights(checkpoint_path)
-            weights[species_index] = Weights(self.ac.actor.get_weights(), self.ac.critic.get_weights())
-        return weights, filters, species_sampler, episodes, training_samples
-
     def _create_generation(self, generation_folder, generation):
         tensorboard_folder = os.path.join(generation_folder, 'tensorboard', datetime.now().strftime("%m-%d-%Y_%H-%M-%S"))
         os.makedirs(generation_folder, exist_ok=True)
@@ -233,13 +239,12 @@ class MultiAgentCOMATrainer:
         policy_sampler = SpeciesSampler(self.population_size)
         return weights, policy_sampler
 
-    def _value_loss(self, qtak_acts_tds, qs):
-        # a trick to input actions and td(lambda) through same API
-        old_q_taken, actions, td_lambda = [tf.squeeze(v) for v in tf.split(qtak_acts_tds, 3, axis=-1)]
+    def _value_loss(self, qtak_acts_rets, qs):
+        old_q_taken, actions, ret = [tf.squeeze(v) for v in tf.split(qtak_acts_rets, 3, axis=-1)]
         q = tf.reduce_sum(tf.one_hot(tf.cast(actions, tf.int32), depth=self.env.action_space.n)*qs, axis=-1)
-        loss1 = tf.square(q - td_lambda)
+        loss1 = tf.square(q - ret)
         q_clipped = old_q_taken + tf.clip_by_value(q - old_q_taken, -self.vf_clip_param, self.vf_clip_param)
-        loss2 = tf.square(q_clipped - td_lambda)
+        loss2 = tf.square(q_clipped - ret)
         loss = tf.maximum(loss1, loss2)
         mean_loss = tf.reduce_mean(loss)
         return mean_loss
