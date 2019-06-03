@@ -129,7 +129,7 @@ if __name__ == '__main__':
     from envs.bacteria_colony.env_config import env_default_config
 
     env = BacteriaColony(env_default_config)
-    expname = 'EvolutionStrategies'  # 'EvolutionStrategies'
+    expname = 'COMA'  # 'EvolutionStrategies'
 
     with open(os.path.join('./dicts', expname+'.pkl'), 'rb') as f:
         dicts = pickle.load(f)
