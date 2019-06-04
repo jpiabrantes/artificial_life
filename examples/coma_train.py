@@ -8,7 +8,7 @@ from envs.bacteria_colony.env_config import env_default_config
 from models.base import COMAActorCritic
 from algorithms.coma.coma_trainer import MultiAgentCOMATrainer
 
-EAGER = True
+EAGER = False
 if not EAGER:
     tf.compat.v1.disable_eager_execution()
 
@@ -28,7 +28,7 @@ env = env_creator()
 gamma = 0.95
 lamb = 0.8  # lambda for TD(lambda)
 seed = 0
-sample_batch_size = 300*10
+sample_batch_size = 30*100
 batch_size = 250
 entropy_coeff = 0.05
 population_size = 10
