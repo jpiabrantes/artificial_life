@@ -99,89 +99,90 @@ class MultiAgentCOMATrainer:
             sampler.set_family_reward_coeff.remote(coeff_dict)
 
     def train(self, epochs, generation, load=False):
-        generation_folder = os.path.join(self.algorithm_folder, 'checkpoints', self.env.name, str(generation))
-        tensorboard_folder = os.path.join(generation_folder, 'tensorboard', 'coma_%d' % time())
-        if load:
-            weights, self.filters, species_sampler, episodes, training_samples = load_generation(self.ac, self.env,
-                                                                                                 generation,
-                                                                                                 self.population_size)
-        else:
-            weights, species_sampler, episodes, training_samples = self._create_generation(generation_folder, generation)
-        target_weights = [w.critic.copy() for w in weights]
-        weights_id_list = [ray.put(w) for w in weights]
+        with tf.device('/cpu:0'):
+            generation_folder = os.path.join(self.algorithm_folder, 'checkpoints', self.env.name, str(generation))
+            tensorboard_folder = os.path.join(generation_folder, 'tensorboard', 'coma_%d' % time())
+            if load:
+                weights, self.filters, species_sampler, episodes, training_samples = load_generation(self.ac, self.env,
+                                                                                                     generation,
+                                                                                                     self.population_size)
+            else:
+                weights, species_sampler, episodes, training_samples = self._create_generation(generation_folder, generation)
+            target_weights = [w.critic.copy() for w in weights]
+            weights_id_list = [ray.put(w) for w in weights]
 
-        species_trained_epochs = defaultdict(int)
-        species_buffers = {}
-        train_summary_writer = tf.summary.create_file_writer(tensorboard_folder)
-        for epoch in range(epochs):
-            if generation > 0:
-                self.set_family_reward_coeffs(epoch)
+            species_trained_epochs = defaultdict(int)
+            species_buffers = {}
+            train_summary_writer = tf.summary.create_file_writer(tensorboard_folder)
+            for epoch in range(epochs):
+                if generation > 0:
+                    self.set_family_reward_coeffs(epoch)
 
-            with Timer() as sampling_time:
-                results_list = ray.get([worker.rollout.remote(weights_id_list) for worker in self.samplers])
-            self.filter_manager.synchronize(self.filters, self.samplers)
-            self._concatenate_samplers_results(results_list, species_buffers)
+                with Timer() as sampling_time:
+                    results_list = ray.get([worker.rollout.remote(weights_id_list) for worker in self.samplers])
+                self.filter_manager.synchronize(self.filters, self.samplers)
+                self._concatenate_samplers_results(results_list, species_buffers)
 
-            self.species_sampler_manager.synchronize(species_sampler, self.samplers)
+                self.species_sampler_manager.synchronize(species_sampler, self.samplers)
 
-            processed_species, training_results = [], []
-            samples_this_iter = 0
-            i = 0
-            for species_index, variables in species_buffers.items():
-                obs, act, adv, ret, old_log_probs, pi, q_tak, states_actions = variables
-                if len(obs) < self.batch_size:
-                    continue
-                samples_this_iter += len(obs)
-                training_samples += len(obs)
-                species_trained_epochs[species_index] += 1
-                processed_species.append(species_index)
-                training_results.append(self.trainers[i].train.remote(weights[species_index], variables, species_index))
-                i = (i + 1) % len(self.trainers)
+                processed_species, training_results = [], []
+                samples_this_iter = 0
+                i = 0
+                for species_index, variables in species_buffers.items():
+                    obs, act, adv, ret, old_log_probs, pi, q_tak, states_actions = variables
+                    if len(obs) < self.batch_size:
+                        continue
+                    samples_this_iter += len(obs)
+                    training_samples += len(obs)
+                    species_trained_epochs[species_index] += 1
+                    processed_species.append(species_index)
+                    training_results.append(self.trainers[i].train.remote(weights[species_index], variables, species_index))
+                    i = (i + 1) % len(self.trainers)
 
-            update_weights_list = ray.get(training_results)
-            for species_index, updated_weights in zip(processed_species, update_weights_list):
-                del species_buffers[species_index]
-                if not (species_trained_epochs[species_index] % self.update_target_freq):
-                    target_weights[species_index] = updated_weights.critic
-                    print('Updated target weights!')
-                weights[species_index] = Weights(actor=updated_weights.actor, critic=updated_weights.critic)
-                weights_id_list[species_index] = ray.put(Weights(weights[species_index].actor,
-                                                                 target_weights[species_index]))
-                if (species_trained_epochs[species_index] % self.save_freq) == self.save_freq - 1 or epoch == epochs-1:
-                    self.ac.set_weights(updated_weights)
-                    checkpoint_path = os.path.join(generation_folder, str(species_index), str(episodes))
-                    self.ac.save_weights(checkpoint_path)
-                    print('Weights of species {} saved!'.format(species_index))
+                update_weights_list = ray.get(training_results)
+                for species_index, updated_weights in zip(processed_species, update_weights_list):
+                    del species_buffers[species_index]
+                    if not (species_trained_epochs[species_index] % self.update_target_freq):
+                        target_weights[species_index] = updated_weights.critic
+                        print('Updated target weights!')
+                    weights[species_index] = Weights(actor=updated_weights.actor, critic=updated_weights.critic)
+                    weights_id_list[species_index] = ray.put(Weights(weights[species_index].actor,
+                                                                     target_weights[species_index]))
+                    if (species_trained_epochs[species_index] % self.save_freq) == self.save_freq - 1 or epoch == epochs-1:
+                        self.ac.set_weights(updated_weights)
+                        checkpoint_path = os.path.join(generation_folder, str(species_index), str(episodes))
+                        self.ac.save_weights(checkpoint_path)
+                        print('Weights of species {} saved!'.format(species_index))
 
-            pi_optimisation_time = sum(ray.get([trainer.pi_optimisation_time.remote() for trainer in self.trainers]))
-            v_optimisation_time = sum(ray.get([trainer.v_optimisation_time.remote() for trainer in self.trainers]))
-            species_stats = ray.get([trainer.species_stats.remote() for trainer in self.trainers])
+                pi_optimisation_time = sum(ray.get([trainer.pi_optimisation_time.remote() for trainer in self.trainers]))
+                v_optimisation_time = sum(ray.get([trainer.v_optimisation_time.remote() for trainer in self.trainers]))
+                species_stats = ray.get([trainer.species_stats.remote() for trainer in self.trainers])
 
-            # get ep_stats from samplers
-            ep_metrics = self._concatenate_ep_stats(ray.get([s.get_ep_stats.remote() for s in self.samplers]))
+                # get ep_stats from samplers
+                ep_metrics = self._concatenate_ep_stats(ray.get([s.get_ep_stats.remote() for s in self.samplers]))
 
-            episodes += ep_metrics['EpisodesThisIter']
-            ep_metrics.update({'Episodes Sampled': episodes, 'Training Samples': training_samples,
-                               'Sampling time': sampling_time.interval,
-                               'Pi optimisation time': np.sum(pi_optimisation_time),
-                               'V optimisation time': np.sum(v_optimisation_time),
-                               'Samples this iter': samples_this_iter,
-                               'Epoch': epoch})
-            if ep_metrics['EpisodesThisIter']:
-                for stats in species_stats:
-                    ep_metrics.update(stats)
+                episodes += ep_metrics['EpisodesThisIter']
+                ep_metrics.update({'Episodes Sampled': episodes, 'Training Samples': training_samples,
+                                   'Sampling time': sampling_time.interval,
+                                   'Pi optimisation time': np.sum(pi_optimisation_time),
+                                   'V optimisation time': np.sum(v_optimisation_time),
+                                   'Samples this iter': samples_this_iter,
+                                   'Epoch': epoch})
+                if ep_metrics['EpisodesThisIter']:
+                    for stats in species_stats:
+                        ep_metrics.update(stats)
 
-            print('Epoch: ', epoch)
-            with train_summary_writer.as_default():
-                for k, v in ep_metrics.items():
-                    print(k, v)
-                    tf.summary.scalar(k, v, step=episodes)
+                print('Epoch: ', epoch)
+                with train_summary_writer.as_default():
+                    for k, v in ep_metrics.items():
+                        print(k, v)
+                        tf.summary.scalar(k, v, step=episodes)
 
-            if epoch % self.save_freq == self.save_freq - 1 or epoch == epochs-1:
-                with open(os.path.join(generation_folder, '%d_variables.pkl' % episodes), 'wb') as f:
-                    pickle.dump((self.filters, species_sampler, episodes, training_samples), f)
-                print('Saved variables!')
-            print('\n' * 2)
+                if epoch % self.save_freq == self.save_freq - 1 or epoch == epochs-1:
+                    with open(os.path.join(generation_folder, '%d_variables.pkl' % episodes), 'wb') as f:
+                        pickle.dump((self.filters, species_sampler, episodes, training_samples), f)
+                    print('Saved variables!')
+                print('\n' * 2)
 
     @staticmethod
     def _concatenate_ep_stats(stats_list, min_and_max=False, include_std=False):
