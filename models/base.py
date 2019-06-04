@@ -107,7 +107,7 @@ def create_vision_and_fc_network(obs_input_shape, conv_sizes, fc_sizes, last_fc_
     fc = MLP(fc_sizes, 0, (None, fc_input_length))(fc_input)
 
     concat = kl.Concatenate(axis=-1)([flatten, fc])
-    out = MLP(last_fc_sizes, num_outputs, (None, None))(concat)
+    out = MLP(last_fc_sizes, num_outputs, (None, concat.shape[1]))(concat)
     if actor:
         return DiscreteActor(inputs=input_layer, outputs=[out])
     else:
@@ -128,6 +128,6 @@ def create_global_critic(input_shape, conv_sizes, fc_sizes, num_outputs):
         vision_layer = kl.Conv2D(filters, kernel, stride, activation='relu', dilation_rate=(i+1, i+1))(vision_layer)
 
     flatten = kl.Flatten()(vision_layer)
-    dense = MLP(fc_sizes, num_outputs, (None, None))(flatten)
+    dense = MLP(fc_sizes, num_outputs, (None, flatten.shape[1]))(flatten)
     return kr.Model(inputs=input_layer, outputs=[dense])
 

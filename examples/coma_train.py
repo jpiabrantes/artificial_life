@@ -33,7 +33,7 @@ update_target_freq = 1
 vf_clip_param = 10
 
 # parallelism
-n_workers = 4
+n_workers = 1
 assert n_workers <= cpu_count(), 'Number of workers is too high'
 DEBUG = n_workers == 1
 ray.init(local_mode=DEBUG)
