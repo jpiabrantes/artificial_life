@@ -156,13 +156,13 @@ class BacteriaColony:
             obs_dict = self._generate_observations()
         self.timers['observe'].add_value(observe_timer.interval)
 
+        # compute a reward for every agent that sent an action
+        dna_results = np.zeros((self.n_agents,), np.int)
+        dnas, counts = np.unique(dna_map[dna_map != 0], return_counts=True)
+        for dna, count in zip(dnas, counts):
+            dna_results[int(dna) - 1] = count
+            self.dna_total_score[int(dna) - 1] += count
         if not self.greedy_reward:
-            # compute a reward for every agent that sent an action
-            dna_results = np.zeros((self.n_agents,), np.int)
-            dnas, counts = np.unique(dna_map[dna_map != 0], return_counts=True)
-            for dna, count in zip(dnas, counts):
-                dna_results[int(dna) - 1] = count
-                self.dna_total_score[int(dna) - 1] += count
             for agent_name, dna in self.agent_dna.items():
                 reward_dict[agent_name] = dna_results[agent.dna - 1]
 
@@ -173,9 +173,8 @@ class BacteriaColony:
             info_dict['__all__'] = {'surplus': self.surplus.mean, 'babies_born': self.babies_born,
                                     'survivors': len(self.agents), 'life_expectancy': self.life_expectancy.mean,
                                     'average_population': self.average_population.mean}
-            if not self.greedy_reward:
-                info_dict['founders_results'] = dna_results
-                info_dict['founders_total_results'] = self.dna_total_score
+            info_dict['founders_results'] = dna_results
+            info_dict['founders_total_results'] = self.dna_total_score
         else:
             done_dict['__all__'] = False
 
