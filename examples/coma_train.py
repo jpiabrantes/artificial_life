@@ -9,7 +9,7 @@ from algorithms.coma.coma_trainer import MultiAgentCOMATrainer
 
 
 # training session
-distributed = False
+distributed = True
 generation = 1
 epochs = 5000
 save_freq = 30
@@ -25,8 +25,8 @@ env = env_creator()
 gamma = 0.95
 lamb = 0.8  # lambda for TD(lambda)
 seed = 0
-sample_batch_size = 30*100
-batch_size = 250
+sample_batch_size = 30*10
+batch_size = 25
 entropy_coeff = 0.05
 population_size = 10
 update_target_freq = 1
