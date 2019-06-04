@@ -195,7 +195,8 @@ class MultiAgentCOMATrainer:
                                'Sampling time': sampling_time.interval,
                                'Pi optimisation time': np.sum(pi_optimisation_time),
                                'V optimisation time': np.sum(v_optimisation_time),
-                               'Samples this iter': samples_this_iter})
+                               'Samples this iter': samples_this_iter,
+                               'Epoch': epoch})
             if ep_metrics['EpisodesThisIter']:
                 for stats in pop_stats:
                     ep_metrics.update(stats)
