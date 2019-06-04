@@ -1,5 +1,4 @@
 import ray
-import tensorflow as tf
 import numpy as np
 from multiprocessing import cpu_count
 
@@ -8,11 +7,9 @@ from envs.bacteria_colony.env_config import env_default_config
 from models.base import COMAActorCritic
 from algorithms.coma.coma_trainer import MultiAgentCOMATrainer
 
-EAGER = False
-if not EAGER:
-    tf.compat.v1.disable_eager_execution()
 
 # training session
+distributed = False
 generation = 1
 epochs = 5000
 save_freq = 30
@@ -65,5 +62,5 @@ trainer = MultiAgentCOMATrainer(env_creator, ac_creator, population_size, seed=s
                                 n_workers=n_workers, batch_size=batch_size, normalise_observation=True,
                                 sample_batch_size=sample_batch_size, entropy_coeff=entropy_coeff,
                                 normalise_advantages=True, update_target_freq=update_target_freq, save_freq=save_freq,
-                                vf_clip_param=vf_clip_param)
+                                vf_clip_param=vf_clip_param, distributed=distributed)
 trainer.train(epochs, generation, load=load)

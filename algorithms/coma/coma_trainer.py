@@ -25,6 +25,19 @@ from algorithms.coma.sampler import Sampler
 Weights = namedtuple('Weights', ('actor', 'critic'))
 
 
+class DummyScope:
+    def __init__(self):
+        self.scope = Dummy
+
+
+class Dummy:
+    def __enter__(self):
+        pass
+
+    def __exit__(self, type, value, traceback):
+        pass
+
+
 def load_generation(model, env, generation, population_size):
     # TODO: have a way for only the actor to load the weights
     algorithm_folder = os.path.dirname(os.path.abspath(__file__))
@@ -46,10 +59,11 @@ class MultiAgentCOMATrainer:
     def __init__(self, env_creator, ac_creator, population_size, update_target_freq=30, seed=0, n_workers=1,
                  sample_batch_size=500, batch_size=250, gamma=1., lamb=0.95, clip_ratio=0.2, pi_lr=3e-4, value_lr=1e-3,
                  train_pi_iters=80, train_v_iters=80, target_kl=0.01, save_freq=10, normalise_advantages=False,
-                 normalise_observation=False, entropy_coeff=0.01, vf_clip_param=10):
+                 normalise_observation=False, entropy_coeff=0.01, vf_clip_param=10, distributed=False):
         np.random.seed(seed)
         tf.random.set_seed(seed)
 
+        self.distributed = distributed
         self.vf_clip_param = vf_clip_param
         self.update_target_freq = update_target_freq
         self.entropy_coeff = entropy_coeff
@@ -83,11 +97,16 @@ class MultiAgentCOMATrainer:
         r2score = get_coma_explained_variance(self.env.action_space.n)
         self.actor_callbacks = [EarlyStoppingKL(self.target_kl)]
 
-        self.ac = ac_creator()
-        self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss,
-                               metrics=[r2score])
-        self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss,
-                              metrics=[kl, entropy])
+        if self.distributed:
+            self.mirrored_strategy = tf.distribute.MirroredStrategy()
+        else:
+            self.mirrored_strategy = DummyScope()
+        with self.mirrored_strategy.scope():
+            self.ac = ac_creator()
+            self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss,
+                                   metrics=[r2score])
+            self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss,
+                                  metrics=[kl, entropy])
 
         self.steps_per_worker = sample_batch_size // n_workers
         if sample_batch_size % n_workers:
@@ -134,9 +153,9 @@ class MultiAgentCOMATrainer:
                 obs, act, adv, ret, old_log_probs, pi, q_tak, states_actions = variables
                 if len(obs) < self.batch_size:
                     continue
-
-                self.ac.actor.set_weights(weights[species_index].actor)
-                self.ac.critic.set_weights(weights[species_index].critic)
+                with self.mirrored_strategy.scope():
+                    self.ac.actor.set_weights(weights[species_index].actor)
+                    self.ac.critic.set_weights(weights[species_index].critic)
                 # for var, w in zip(self.ac.actor.variables, weights[species_index].actor):
                 #     var.load(w)
                 # for var, w in zip(self.ac.critic.variables, weights[species_index].critic):
@@ -267,8 +286,9 @@ class MultiAgentCOMATrainer:
                 species_folder = os.path.join(generation_folder, str(new_species_index))
                 os.makedirs(species_folder, exist_ok=True)
                 checkpoint_path = os.path.join(species_folder, str(episodes))
-                self.ac.actor.set_weights(weights[species_index].actor)
-                self.ac.critic.set_weights(weights[species_index].critic)
+                with self.mirrored_strategy.scope():
+                    self.ac.actor.set_weights(weights[species_index].actor)
+                    self.ac.critic.set_weights(weights[species_index].critic)
                 self.ac.save_weights(checkpoint_path)
                 new_weights[new_species_index] = deepcopy(weights[species_index])
             weights = new_weights
