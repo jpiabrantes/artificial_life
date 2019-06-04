@@ -8,6 +8,7 @@ import os
 import pickle
 from datetime import datetime
 from time import time
+from copy import deepcopy
 
 import numpy as np
 import tensorflow as tf
@@ -28,7 +29,8 @@ def load_generation(model, env, generation, population_size):
     # TODO: have a way for only the actor to load the weights
     algorithm_folder = os.path.dirname(os.path.abspath(__file__))
     generation_folder = os.path.join(algorithm_folder, 'checkpoints', env.name, str(generation))
-    pickle_path = os.path.join(generation_folder, '3508_variables.pkl')
+    last_episode = max([int(s.split('_')[0]) for s in os.listdir(generation_folder) if 'variables' in s])
+    pickle_path = os.path.join(generation_folder, '%d_variables.pkl' % last_episode)
     with open(pickle_path, 'rb') as f:
         filters, species_sampler, episodes, training_samples = pickle.load(f)
     weights = [None] * population_size
@@ -95,6 +97,13 @@ class MultiAgentCOMATrainer:
         self.samplers = [Sampler.remote(self.steps_per_worker, gamma, lamb, env_creator, ac_creator, i,
                                         population_size, normalise_observation) for i in range(n_workers)]
 
+    def set_family_reward_coeffs(self, epoch):
+        coeff = 1-np.exp(-epoch/250)
+        coeff_dict = {k: coeff for k in range(1, self.population_size)}
+        coeff_dict[0] = 0.
+        for sampler in self.samplers:
+            sampler.set_family_reward_coeff.remote(coeff_dict)
+
     def train(self, epochs, generation, load=False):
         generation_folder = os.path.join(self.algorithm_folder, 'checkpoints', self.env.name, str(generation))
         tensorboard_folder = os.path.join(generation_folder, 'tensorboard', 'coma_%d' % time())
@@ -112,6 +121,8 @@ class MultiAgentCOMATrainer:
         species_buffers = {}
         train_summary_writer = tf.summary.create_file_writer(tensorboard_folder)
         for epoch in range(epochs):
+            if generation > 0:
+                self.set_family_reward_coeffs(epoch)
             samples_this_iter = 0
             with Timer() as sampling_time:
                 results_list = ray.get([worker.rollout.remote(weights_id_list) for worker in self.samplers])
@@ -228,7 +239,7 @@ class MultiAgentCOMATrainer:
         os.makedirs(generation_folder, exist_ok=True)
         os.makedirs(tensorboard_folder, exist_ok=True)
         episodes, collected_samples = 0, 0
-        weights = []
+        species_sampler = SpeciesSampler(self.population_size)
         if generation == 0:
             weights = [Weights(self.ac.actor.get_weights(), self.ac.critic.get_weights())]*self.population_size
             for species_index in range(self.population_size):
@@ -236,8 +247,30 @@ class MultiAgentCOMATrainer:
                 os.makedirs(species_folder, exist_ok=True)
                 checkpoint_path = os.path.join(species_folder, str(episodes))
                 self.ac.save_weights(checkpoint_path)
-        policy_sampler = SpeciesSampler(self.population_size)
-        return weights, policy_sampler
+        else:
+            last_generation = generation - 1
+            weights, self.filters, old_species_sampler, episodes, training_samples = load_generation(self.ac, self.env,
+                                                                                                     last_generation,
+                                                                                                     self.population_size)
+            with open(os.path.join(generation_folder, '%d_variables.pkl' % episodes), 'wb') as f:
+                pickle.dump((self.filters, species_sampler, episodes, training_samples), f)
+            results = sorted([(i, v) for i, v in enumerate(old_species_sampler.rs.mean)], key=lambda tup: tup[1])
+            species_indices = [None]*self.population_size
+            species_indices[0] = results[-1][0]
+            species_indices[1] = results[-1][0]
+            species_indices[2] = results[-2][0]
+            species_indices[3:] = old_species_sampler.sample(self.population_size-3)
+            new_weights = [None]*self.population_size
+            for new_species_index, species_index in enumerate(species_indices):
+                species_folder = os.path.join(generation_folder, str(new_species_index))
+                os.makedirs(species_folder, exist_ok=True)
+                checkpoint_path = os.path.join(species_folder, str(episodes))
+                self.ac.critic.set_weights(weights[species_index].critic)
+                self.ac.actor.set_weights(weights[species_index].actor)
+                self.ac.save_weights(checkpoint_path)
+                new_weights[new_species_index] = deepcopy(weights[species_index])
+
+        return weights, old_species_sampler
 
     def _value_loss(self, qtak_acts_rets, qs):
         old_q_taken, actions, ret = [tf.squeeze(v) for v in tf.split(qtak_acts_rets, 3, axis=-1)]

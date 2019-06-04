@@ -1,5 +1,6 @@
 from copy import deepcopy
 from time import time
+from collections import defaultdict
 
 import numpy as np
 # from cv2 import cvtColor, COLOR_HSV2RGB
@@ -20,6 +21,8 @@ class BacteriaColony:
     reward_range = (0.0, float('inf'))
 
     def __init__(self, config):
+        self.family_reward_coeff = lambda agent_name: 0
+
         self.State = State
         self.Terrain = Terrain
 
@@ -123,6 +126,7 @@ class BacteriaColony:
         np.random.shuffle(action_items)
 
         # Agents act: move, harvest, eat, reproduce and age
+        family_reward = defaultdict(int)
         dna_map = self._state[:, :, State.DNA].copy()
         self.agent_dna = {}  # Keep a record of an agent dna (important if it dies)
         with Timer() as move_timer:
@@ -132,6 +136,10 @@ class BacteriaColony:
                 newborn, harvest, died = agent.step(action, self.n_rows, self.n_cols, self.tiles)
                 if self.greedy_reward:
                     reward_dict[agent_name] = harvest
+                    family_reward[agent.dna] += harvest
+                else:
+                    reward_dict[agent_name] = 1
+                    family_reward[agent.dna] += 1
                 if newborn:
                     self.babies_born += 1
                 if died:
@@ -156,15 +164,15 @@ class BacteriaColony:
             obs_dict = self._generate_observations()
         self.timers['observe'].add_value(observe_timer.interval)
 
-        # compute a reward for every agent that sent an action
         dna_results = np.zeros((self.n_agents,), np.int)
         dnas, counts = np.unique(dna_map[dna_map != 0], return_counts=True)
         for dna, count in zip(dnas, counts):
             dna_results[int(dna) - 1] = count
             self.dna_total_score[int(dna) - 1] += count
-        if not self.greedy_reward:
-            for agent_name, dna in self.agent_dna.items():
-                reward_dict[agent_name] = dna_results[agent.dna - 1]
+
+        # add in the family reward
+        for agent_name, dna in self.agent_dna.items():
+            reward_dict[agent_name] += family_reward[dna]*self.family_reward_coeff(agent_name)
 
         # Check termination
         self.iter += 1
