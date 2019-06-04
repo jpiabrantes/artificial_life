@@ -17,7 +17,7 @@ load = False
 
 # env
 config = env_default_config.copy()
-config['greedy_reward'] = False
+config['greedy_reward'] = True
 env_creator = lambda: BacteriaColony(config)
 env = env_creator()
 
