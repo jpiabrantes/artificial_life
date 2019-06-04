@@ -1,8 +1,12 @@
+from collections import namedtuple
 import time
 
 import ray
 import numpy as np
 import scipy.signal
+
+
+Weights = namedtuple('Weights', ('actor', 'critic'))
 
 
 def agent_name_to_policy_index(agent_name):
@@ -121,9 +125,9 @@ class SpeciesRunningStat:
 
 
 class SpeciesSampler:
-    def __init__(self, population_size):
+    def __init__(self, population_size, bias=1):
         self.rs = SpeciesRunningStat(population_size)
-        self.buffer = SpeciesRunningStat(population_size, initial_bias=1)
+        self.buffer = SpeciesRunningStat(population_size, initial_bias=bias)
         self._last_sample = None
 
     def show_results(self, species_indices, values):
