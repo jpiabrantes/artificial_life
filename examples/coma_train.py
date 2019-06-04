@@ -9,7 +9,6 @@ from models.base import COMAActorCritic
 from algorithms.coma.coma_trainer_v2 import MultiAgentCOMATrainer
 
 # training session
-distributed = True
 generation = 1
 epochs = 5000
 save_freq = 30

@@ -12,6 +12,7 @@ from copy import deepcopy
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.client import device_lib
 import ray
 
 from utils.misc import Timer, SpeciesSampler, SpeciesSamplerManager, Weights
@@ -19,6 +20,11 @@ from utils.filters import FilterManager, MeanStdFilter
 from utils.coma_helper import get_states_actions_for_locs_and_dna
 from algorithms.coma.sampler import Sampler
 from algorithms.coma.trainer import Trainer
+
+
+def get_number_of_gpus():
+    local_device_protos = device_lib.list_local_devices()
+    return len([x for x in local_device_protos if x.device_type == 'GPU'])
 
 
 def load_generation(model, env, generation, population_size):
@@ -67,9 +73,9 @@ class MultiAgentCOMATrainer:
 
         self.n_acs = env.n_agents
         self.ac_creator = ac_creator
-
-        self.ac = ac_creator()
-        if n_trainers > 1:
+        with tf.device('/cpu:0'):
+            self.ac = ac_creator()
+        if get_number_of_gpus() > 0:
             trainer = ray.remote(num_gpus=1)(Trainer)
         else:
             trainer = ray.remote()(Trainer)
