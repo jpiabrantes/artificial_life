@@ -165,6 +165,9 @@ class Sampler:
 
         return species_buffers, global_dict
 
+    def set_family_reward_coeff(self, coeff_dict):
+        self.env.family_reward_coeff = lambda agent_name: coeff_dict[int(agent_name.split('_')[0])]
+
     def _load_species(self, species_indices, weight_id_list):
         species_ac_map = {}
         ac_names = list(self.acs.keys())
@@ -197,7 +200,7 @@ class Sampler:
         return ac_info
 
     def _get_action_dict_and_global_action(self, ac_info, raw_obs_dict):
-        global_action = np.zeros((self.env.n_rows, self.env.n_cols), np.int32)
+        global_action = np.ones((self.env.n_rows, self.env.n_cols), np.int32)*-1
         action_dict = {}
         for ac_name, info in ac_info.items():
             observation_arr = np.stack(info['obs'])

@@ -13,7 +13,7 @@ if not EAGER:
     tf.compat.v1.disable_eager_execution()
 
 # training session
-generation = 0
+generation = 1
 epochs = 5000
 save_freq = 30
 load = False
