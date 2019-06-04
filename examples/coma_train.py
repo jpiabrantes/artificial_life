@@ -64,6 +64,6 @@ ac_creator = lambda: COMAActorCritic(**ac_kwarg)
 trainer = MultiAgentCOMATrainer(env_creator, ac_creator, population_size, seed=seed, gamma=gamma, lamb=lamb,
                                 n_workers=n_workers, batch_size=batch_size, normalise_observation=True,
                                 sample_batch_size=sample_batch_size, entropy_coeff=entropy_coeff,
-                                normalise_advantages=False, update_target_freq=update_target_freq, save_freq=save_freq,
+                                normalise_advantages=True, update_target_freq=update_target_freq, save_freq=save_freq,
                                 vf_clip_param=vf_clip_param)
 trainer.train(epochs, generation, load=load)
