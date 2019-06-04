@@ -26,15 +26,16 @@ critic_args = {'conv_sizes': [(32, (2, 2), 1), (16, (2, 2), 1), (4, (2, 2), 1)],
 ac_kwarg = {'actor_args': actor_args, 'critic_args': critic_args, 'observation_space': env.observation_space}
 
 
+# EAGER = False
+# if not EAGER:
+#     tf.compat.v1.disable_eager_execution()
+assert not tf.executing_eagerly()
 
-EAGER = False
-if not EAGER:
-    tf.compat.v1.disable_eager_execution()
 
 
 mirrored_strategy = tf.distribute.MirroredStrategy()
 with mirrored_strategy.scope():
-    model = kr.Sequential([kl.Dense(5, input_shape=(5,)), kl.Dense(1)])
     ac = COMAActorCritic(**ac_kwarg)
 
-print(ac.get_weights())
+with mirrored_strategy.scope():
+    ac.critic.set_weights(ac.critic.get_weights())
