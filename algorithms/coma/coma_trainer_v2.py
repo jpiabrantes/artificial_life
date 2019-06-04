@@ -117,42 +117,43 @@ class MultiAgentCOMATrainer:
             for epoch in range(epochs):
                 if generation > 0:
                     self.set_family_reward_coeffs(epoch)
-                with Timer() as total_time:
-                    with Timer() as sampling_time:
-                        results_list = ray.get([worker.rollout.remote(weights_id_list) for worker in self.samplers])
-                    self.filter_manager.synchronize(self.filters, self.samplers)
-                    self._concatenate_samplers_results(results_list, species_buffers)
+                total_time = time()
+                with Timer() as sampling_time:
+                    results_list = ray.get([worker.rollout.remote(weights_id_list) for worker in self.samplers])
+                self.filter_manager.synchronize(self.filters, self.samplers)
+                self._concatenate_samplers_results(results_list, species_buffers)
 
-                    self.species_sampler_manager.synchronize(species_sampler, self.samplers)
+                self.species_sampler_manager.synchronize(species_sampler, self.samplers)
 
-                    processed_species, training_results = [], []
-                    samples_this_iter = 0
-                    i = 0
-                    for species_index, variables in species_buffers.items():
-                        obs, act, adv, ret, old_log_probs, pi, q_tak, states_actions = variables
-                        if len(obs) < self.batch_size:
-                            continue
-                        samples_this_iter += len(obs)
-                        training_samples += len(obs)
-                        species_trained_epochs[species_index] += 1
-                        processed_species.append(species_index)
-                        training_results.append(self.trainers[i].train.remote(weights[species_index], variables, species_index))
-                        i = (i + 1) % len(self.trainers)
+                processed_species, training_results = [], []
+                samples_this_iter = 0
+                i = 0
+                for species_index, variables in species_buffers.items():
+                    obs, act, adv, ret, old_log_probs, pi, q_tak, states_actions = variables
+                    if len(obs) < self.batch_size:
+                        continue
+                    samples_this_iter += len(obs)
+                    training_samples += len(obs)
+                    species_trained_epochs[species_index] += 1
+                    processed_species.append(species_index)
+                    training_results.append(self.trainers[i].train.remote(weights[species_index], variables, species_index))
+                    i = (i + 1) % len(self.trainers)
 
-                    update_weights_list = ray.get(training_results)
-                    for species_index, updated_weights in zip(processed_species, update_weights_list):
-                        del species_buffers[species_index]
-                        if not (species_trained_epochs[species_index] % self.update_target_freq):
-                            target_weights[species_index] = updated_weights.critic
-                            print('Updated target weights!')
-                        weights[species_index] = Weights(actor=updated_weights.actor, critic=updated_weights.critic)
-                        weights_id_list[species_index] = ray.put(Weights(weights[species_index].actor,
-                                                                         target_weights[species_index]))
-                        if (species_trained_epochs[species_index] % self.save_freq) == self.save_freq - 1 or epoch == epochs-1:
-                            self.ac.set_weights(updated_weights)
-                            checkpoint_path = os.path.join(generation_folder, str(species_index), str(episodes))
-                            self.ac.save_weights(checkpoint_path)
-                            print('Weights of species {} saved!'.format(species_index))
+                update_weights_list = ray.get(training_results)
+                for species_index, updated_weights in zip(processed_species, update_weights_list):
+                    del species_buffers[species_index]
+                    if not (species_trained_epochs[species_index] % self.update_target_freq):
+                        target_weights[species_index] = updated_weights.critic
+                        print('Updated target weights!')
+                    weights[species_index] = Weights(actor=updated_weights.actor, critic=updated_weights.critic)
+                    weights_id_list[species_index] = ray.put(Weights(weights[species_index].actor,
+                                                                     target_weights[species_index]))
+                    if (species_trained_epochs[species_index] % self.save_freq) == self.save_freq - 1 or epoch == epochs-1:
+                        self.ac.critic.set_weights(updated_weights.critic)
+                        self.ac.actor.set_weights(updated_weights.actor)
+                        checkpoint_path = os.path.join(generation_folder, str(species_index), str(episodes))
+                        self.ac.save_weights(checkpoint_path)
+                        print('Weights of species {} saved!'.format(species_index))
 
                 pi_optimisation_time = sum(ray.get([trainer.pi_optimisation_time.remote() for trainer in self.trainers]))
                 v_optimisation_time = sum(ray.get([trainer.v_optimisation_time.remote() for trainer in self.trainers]))
@@ -166,7 +167,7 @@ class MultiAgentCOMATrainer:
                                    'Sampling time': sampling_time.interval,
                                    'Pi optimisation time': np.sum(pi_optimisation_time),
                                    'V optimisation time': np.sum(v_optimisation_time),
-                                   'Total time': total_time.interval,
+                                   'Total time': time()-total_time,
                                    'Samples this iter': samples_this_iter,
                                    'Epoch': epoch})
                 if ep_metrics['EpisodesThisIter']:
