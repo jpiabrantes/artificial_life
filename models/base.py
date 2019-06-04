@@ -61,9 +61,6 @@ class COMAActorCritic(kr.Model):
         self.actor = create_vision_and_fc_network(**actor_args)
         self.critic = create_global_critic(**critic_args)
 
-    def call(self, inputs):
-        return self.actor(inputs), self.critic(inputs)
-
     def action_logp_pi(self, obs):
         return self.actor.action_logp_pi(obs)
 
@@ -72,6 +69,11 @@ class COMAActorCritic(kr.Model):
         val = np.sum(qs*pi, axis=-1)
         adv = qs[np.arange(len(actions)), actions]-val
         return val, adv
+
+    @tf.function
+    def load_critic(self, weights):
+        for var, weight in zip(self.critic.variables, weights):
+            var.assign(weight)
 
 
 class PPOActorCritic(kr.Model):
