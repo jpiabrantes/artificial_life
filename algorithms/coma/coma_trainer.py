@@ -112,8 +112,7 @@ class MultiAgentCOMATrainer:
                                                                                                  generation,
                                                                                                  self.population_size)
         else:
-            weights, species_sampler = self._create_generation(generation_folder, generation)
-            episodes, training_samples = 0, 0
+            weights, species_sampler, episodes, training_samples = self._create_generation(generation_folder, generation)
         target_weights = [w.critic.copy() for w in weights]
         weights_id_list = [ray.put(w) for w in weights]
 
@@ -238,7 +237,7 @@ class MultiAgentCOMATrainer:
         tensorboard_folder = os.path.join(generation_folder, 'tensorboard', datetime.now().strftime("%m-%d-%Y_%H-%M-%S"))
         os.makedirs(generation_folder, exist_ok=True)
         os.makedirs(tensorboard_folder, exist_ok=True)
-        episodes, collected_samples = 0, 0
+        episodes, training_samples = 0, 0
         species_sampler = SpeciesSampler(self.population_size)
         if generation == 0:
             weights = [Weights(self.ac.actor.get_weights(), self.ac.critic.get_weights())]*self.population_size
@@ -270,7 +269,7 @@ class MultiAgentCOMATrainer:
                 self.ac.save_weights(checkpoint_path)
                 new_weights[new_species_index] = deepcopy(weights[species_index])
 
-        return weights, old_species_sampler
+        return weights, species_sampler, episodes, training_samples
 
     def _value_loss(self, qtak_acts_rets, qs):
         old_q_taken, actions, ret = [tf.squeeze(v) for v in tf.split(qtak_acts_rets, 3, axis=-1)]
