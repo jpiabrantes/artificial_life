@@ -5,8 +5,8 @@ from multiprocessing import cpu_count
 from envs.bacteria_colony.bacteria_colony import BacteriaColony
 from envs.bacteria_colony.env_config import env_default_config
 from models.base import COMAActorCritic
-from algorithms.coma.coma_trainer import MultiAgentCOMATrainer
-
+# from algorithms.coma.coma_trainer import MultiAgentCOMATrainer
+from algorithms.coma.coma_trainer_v2 import MultiAgentCOMATrainer
 
 # training session
 distributed = True
@@ -25,15 +25,16 @@ env = env_creator()
 gamma = 0.95
 lamb = 0.8  # lambda for TD(lambda)
 seed = 0
-sample_batch_size = 30*10
-batch_size = 25
+sample_batch_size = 300*10
+batch_size = 250
 entropy_coeff = 0.05
 population_size = 10
 update_target_freq = 1
 vf_clip_param = 10
 
 # parallelism
-n_workers = 1
+n_trainers = 4
+n_workers = 4
 assert n_workers <= cpu_count(), 'Number of workers is too high'
 DEBUG = n_workers == 1
 ray.init(local_mode=DEBUG)
@@ -62,5 +63,5 @@ trainer = MultiAgentCOMATrainer(env_creator, ac_creator, population_size, seed=s
                                 n_workers=n_workers, batch_size=batch_size, normalise_observation=True,
                                 sample_batch_size=sample_batch_size, entropy_coeff=entropy_coeff,
                                 normalise_advantages=True, update_target_freq=update_target_freq, save_freq=save_freq,
-                                vf_clip_param=vf_clip_param, distributed=distributed)
+                                vf_clip_param=vf_clip_param, n_trainers=n_trainers)
 trainer.train(epochs, generation, load=load)

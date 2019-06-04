@@ -12,27 +12,13 @@ from copy import deepcopy
 
 import numpy as np
 import tensorflow as tf
-import tensorflow.keras as kr
 import ray
 
 from utils.misc import Timer, SpeciesSampler, SpeciesSamplerManager, Weights
 from utils.filters import FilterManager, MeanStdFilter
 from utils.coma_helper import get_states_actions_for_locs_and_dna
-from utils.metrics import get_kl_metric, entropy, get_coma_explained_variance, EarlyStoppingKL
 from algorithms.coma.sampler import Sampler
-
-
-class DummyScope:
-    def __init__(self):
-        self.scope = Dummy
-
-
-class Dummy:
-    def __enter__(self):
-        pass
-
-    def __exit__(self, type, value, traceback):
-        pass
+from algorithms.coma.trainer import Trainer
 
 
 def load_generation(model, env, generation, population_size):
@@ -56,23 +42,15 @@ class MultiAgentCOMATrainer:
     def __init__(self, env_creator, ac_creator, population_size, update_target_freq=30, seed=0, n_workers=1,
                  sample_batch_size=500, batch_size=250, gamma=1., lamb=0.95, clip_ratio=0.2, pi_lr=3e-4, value_lr=1e-3,
                  train_pi_iters=80, train_v_iters=80, target_kl=0.01, save_freq=10, normalise_advantages=False,
-                 normalise_observation=False, entropy_coeff=0.01, vf_clip_param=10, distributed=False):
+                 normalise_observation=False, entropy_coeff=0.01, vf_clip_param=10, n_trainers=1):
         np.random.seed(seed)
         tf.random.set_seed(seed)
 
-        self.distributed = distributed
-        self.vf_clip_param = vf_clip_param
         self.update_target_freq = update_target_freq
-        self.entropy_coeff = entropy_coeff
-        self.clip_ratio = clip_ratio
-        self.normalize_advantages = normalise_advantages
         self.n_workers = n_workers
         self.sample_batch_size = sample_batch_size
         self.batch_size = batch_size
         self.save_freq = save_freq
-        self.train_v_iters = train_v_iters
-        self.train_pi_iters = train_pi_iters
-        self.target_kl = target_kl
         self.population_size = population_size
 
         self.algorithm_folder = os.path.dirname(os.path.abspath(__file__))
@@ -90,20 +68,15 @@ class MultiAgentCOMATrainer:
         self.n_acs = env.n_agents
         self.ac_creator = ac_creator
 
-        kl = get_kl_metric(self.env.action_space.n)
-        r2score = get_coma_explained_variance(self.env.action_space.n)
-        self.actor_callbacks = [EarlyStoppingKL(self.target_kl)]
-
-        if self.distributed:
-            self.mirrored_strategy = tf.distribute.MirroredStrategy()
+        self.ac = ac_creator()
+        if n_trainers > 1:
+            trainer = ray.remote(Trainer, num_gpus=1)
         else:
-            self.mirrored_strategy = DummyScope()
-        with self.mirrored_strategy.scope():
-            self.ac = ac_creator()
-            self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss,
-                                   metrics=[r2score])
-            self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss,
-                                  metrics=[kl, entropy])
+            trainer = ray.remote(Trainer)
+        self.trainers = [trainer.remote(ac_creator, batch_size, normalise_advantages, train_pi_iters, train_v_iters,
+                                        value_lr, pi_lr, env_creator, target_kl, clip_ratio, vf_clip_param,
+                                        entropy_coeff)
+                         for _ in range(n_trainers)]
 
         self.steps_per_worker = sample_batch_size // n_workers
         if sample_batch_size % n_workers:
@@ -137,71 +110,46 @@ class MultiAgentCOMATrainer:
         for epoch in range(epochs):
             if generation > 0:
                 self.set_family_reward_coeffs(epoch)
-            samples_this_iter = 0
+
             with Timer() as sampling_time:
                 results_list = ray.get([worker.rollout.remote(weights_id_list) for worker in self.samplers])
             self.filter_manager.synchronize(self.filters, self.samplers)
             self._concatenate_samplers_results(results_list, species_buffers)
 
             self.species_sampler_manager.synchronize(species_sampler, self.samplers)
-            pi_optimisation_time, v_optimisation_time, pop_stats = [], [], []
-            processed_species = []
+
+            processed_species, training_results = [], []
+            samples_this_iter = 0
+            i = 0
             for species_index, variables in species_buffers.items():
                 obs, act, adv, ret, old_log_probs, pi, q_tak, states_actions = variables
                 if len(obs) < self.batch_size:
                     continue
-
-                for var, w in zip(self.ac.actor.variables, weights[species_index].actor):
-                    var.load(w)
-                for var, w in zip(self.ac.critic.variables, weights[species_index].critic):
-                    var.load(w)
-                processed_species.append(species_index)
-
-                if self.normalize_advantages:
-                    adv = adv / (np.std(adv) + 1e-8)#(adv - np.mean(adv)) / (np.std(adv) + 1e-8)
-                act_adv_logs = np.concatenate([act[:, None], adv[:, None], old_log_probs[:, None]], axis=-1)
-                with Timer() as pi_optimisation_timer:
-                    result = self.ac.actor.fit(obs, act_adv_logs, batch_size=self.batch_size, shuffle=True,
-                                               epochs=self.train_pi_iters, verbose=False,
-                                               callbacks=self.actor_callbacks)
-                    old_policy_loss = result.history['loss'][0]
-                    old_entropy = result.history['entropy'][0]
-                    kl = result.history['kl'][-1]
-
-                qtak_act_ret = np.concatenate([q_tak[:, None], act[:, None], ret[:, None]], axis=-1)
-                with Timer() as v_optimisation_timer:
-                    result = self.ac.critic.fit(states_actions, qtak_act_ret, shuffle=True, batch_size=self.batch_size,
-                                                verbose=False, epochs=self.train_v_iters)
-                    old_value_loss = result.history['loss'][0]
-                    value_loss = result.history['loss'][-1]
-                    old_explained_variance = result.history['explained_variance'][0]
-                    explained_variance = result.history['explained_variance'][-1]
-
+                samples_this_iter += len(obs)
+                training_samples += len(obs)
                 species_trained_epochs[species_index] += 1
+                processed_species.append(species_index)
+                training_results.append(self.trainers[i].train.remote(weights[species_index], variables, species_index))
+                i = (i + 1) % len(self.trainers)
+
+            update_weights_list = ray.get(training_results)
+            for species_index, updated_weights in zip(processed_species, update_weights_list):
+                del species_buffers[species_index]
                 if not (species_trained_epochs[species_index] % self.update_target_freq):
-                    target_weights[species_index] = self.ac.critic.get_weights()
+                    target_weights[species_index] = updated_weights.critic
                     print('Updated target weights!')
-                weights[species_index] = Weights(actor=self.ac.actor.get_weights(), critic=self.ac.critic.get_weights())
+                weights[species_index] = Weights(actor=updated_weights.actor, critic=updated_weights.critic)
                 weights_id_list[species_index] = ray.put(Weights(weights[species_index].actor,
                                                                  target_weights[species_index]))
                 if (species_trained_epochs[species_index] % self.save_freq) == self.save_freq - 1 or epoch == epochs-1:
+                    self.ac.set_weights(updated_weights)
                     checkpoint_path = os.path.join(generation_folder, str(species_index), str(episodes))
                     self.ac.save_weights(checkpoint_path)
                     print('Weights of species {} saved!'.format(species_index))
 
-                samples_this_iter += len(obs)
-                training_samples += len(obs)
-                pi_optimisation_time += [pi_optimisation_timer.interval]
-                v_optimisation_time += [v_optimisation_timer.interval]
-                key_value_pairs = [('LossQ', old_value_loss), ('deltaQLoss', old_value_loss-value_loss),
-                                   ('Old Explained Variance', old_explained_variance),
-                                   ('Explained variance', explained_variance),
-                                   ('KL', kl), ('Old entropy', old_entropy), ('LossPi', old_policy_loss),
-                                   ('Return', np.mean(ret))]
-                pop_stats.append({'%s_%s' % (species_index, k): v for k, v in key_value_pairs})
-
-            for species_index in processed_species:
-                del species_buffers[species_index]
+            pi_optimisation_time = sum(ray.get([trainer.pi_optimisation_time.remote() for trainer in self.trainers]))
+            v_optimisation_time = sum(ray.get([trainer.v_optimisation_time.remote() for trainer in self.trainers]))
+            species_stats = ray.get([trainer.species_stats.remote() for trainer in self.trainers])
 
             # get ep_stats from samplers
             ep_metrics = self._concatenate_ep_stats(ray.get([s.get_ep_stats.remote() for s in self.samplers]))
@@ -214,7 +162,7 @@ class MultiAgentCOMATrainer:
                                'Samples this iter': samples_this_iter,
                                'Epoch': epoch})
             if ep_metrics['EpisodesThisIter']:
-                for stats in pop_stats:
+                for stats in species_stats:
                     ep_metrics.update(stats)
 
             print('Epoch: ', epoch)
@@ -255,8 +203,9 @@ class MultiAgentCOMATrainer:
         os.makedirs(generation_folder, exist_ok=True)
         os.makedirs(tensorboard_folder, exist_ok=True)
         episodes, training_samples = 0, 0
-        species_sampler = SpeciesSampler(self.population_size)
+
         if generation == 0:
+            species_sampler = SpeciesSampler(self.population_size, bias=1)
             weights = [Weights(self.ac.actor.get_weights(), self.ac.critic.get_weights())]*self.population_size
             for species_index in range(self.population_size):
                 species_folder = os.path.join(generation_folder, str(species_index))
@@ -264,6 +213,7 @@ class MultiAgentCOMATrainer:
                 checkpoint_path = os.path.join(species_folder, str(episodes))
                 self.ac.save_weights(checkpoint_path)
         else:
+            species_sampler = SpeciesSampler(self.population_size, bias=35)
             last_generation = generation - 1
             weights, self.filters, old_species_sampler, episodes, training_samples = load_generation(self.ac, self.env,
                                                                                                      last_generation,
@@ -275,7 +225,9 @@ class MultiAgentCOMATrainer:
             species_indices[0] = results[-1][0]
             species_indices[1] = results[-1][0]
             species_indices[2] = results[-2][0]
-            species_indices[3:] = old_species_sampler.sample(self.population_size-3)
+            species_indices[3] = results[-3][0]
+            species_indices[4] = results[-4][0]
+            species_indices[4:] = old_species_sampler.sample(self.population_size-5)
             new_weights = [None]*self.population_size
             for new_species_index, species_index in enumerate(species_indices):
                 species_folder = os.path.join(generation_folder, str(new_species_index))
@@ -290,30 +242,6 @@ class MultiAgentCOMATrainer:
             weights = new_weights
 
         return weights, species_sampler, episodes, training_samples
-
-    def _value_loss(self, qtak_acts_rets, qs):
-        old_q_taken, actions, ret = [tf.squeeze(v) for v in tf.split(qtak_acts_rets, 3, axis=-1)]
-        q = tf.reduce_sum(tf.one_hot(tf.cast(actions, tf.int32), depth=self.env.action_space.n)*qs, axis=-1)
-        loss1 = tf.square(q - ret)
-        q_clipped = old_q_taken + tf.clip_by_value(q - old_q_taken, -self.vf_clip_param, self.vf_clip_param)
-        loss2 = tf.square(q_clipped - ret)
-        loss = tf.maximum(loss1, loss2)
-        mean_loss = tf.reduce_mean(loss)
-        return mean_loss
-
-    def _surrogate_loss(self, acts_advs_logs, logits):
-        # a trick to input actions and advantages through same API
-        actions, advantages, old_log_probs = [tf.squeeze(v) for v in tf.split(acts_advs_logs, 3, axis=-1)]
-        actions = tf.cast(actions, tf.int32)
-        all_log_probs = tf.nn.log_softmax(logits)
-        probs = tf.exp(all_log_probs)
-        log_probs = tf.reduce_sum(tf.one_hot(actions, depth=self.env.action_space.n) * all_log_probs, axis=-1)
-        ratio = tf.exp(log_probs - old_log_probs)
-        min_adv = tf.where(advantages > 0, (1 + self.clip_ratio) * advantages, (1 - self.clip_ratio) * advantages)
-        entropy = tf.reduce_mean(-tf.reduce_sum(tf.where(probs == 0., tf.zeros_like(probs), probs*all_log_probs),
-                                                axis=1))
-        surrogate_loss = -tf.reduce_mean(tf.minimum(ratio * advantages, min_adv))
-        return surrogate_loss - self.entropy_coeff*entropy
 
     def _initialise_buffers(self, sizes_dict):
         buffers = {}
