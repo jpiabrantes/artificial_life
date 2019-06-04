@@ -135,10 +135,13 @@ class MultiAgentCOMATrainer:
                 obs, act, adv, ret, old_log_probs, pi, q_tak, states_actions = variables
                 if len(obs) < self.batch_size:
                     continue
-                for var, w in zip(self.ac.actor.variables, weights[species_index].actor):
-                    var.load(w)
-                for var, w in zip(self.ac.critic.variables, weights[species_index].critic):
-                    var.load(w)
+
+                self.ac.actor.set_weights(weights[species_index].actor)
+                self.ac.critic.set_weights(weights[species_index].critic)
+                # for var, w in zip(self.ac.actor.variables, weights[species_index].actor):
+                #     var.load(w)
+                # for var, w in zip(self.ac.critic.variables, weights[species_index].critic):
+                #     var.load(w)
                 processed_species.append(species_index)
 
                 if self.normalize_advantages:
