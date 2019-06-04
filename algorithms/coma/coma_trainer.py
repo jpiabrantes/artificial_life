@@ -82,7 +82,7 @@ class MultiAgentCOMATrainer:
         kl = get_kl_metric(self.env.action_space.n)
         r2score = get_coma_explained_variance(self.env.action_space.n)
         self.actor_callbacks = [EarlyStoppingKL(self.target_kl)]
-        # mirrored_strategy = tf.distribute.MirroredStrategy()
+        mirrored_strategy = tf.distribute.MirroredStrategy()
         # with mirrored_strategy.scope():
         self.ac = ac_creator()
         self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss,
@@ -268,10 +268,11 @@ class MultiAgentCOMATrainer:
                 species_folder = os.path.join(generation_folder, str(new_species_index))
                 os.makedirs(species_folder, exist_ok=True)
                 checkpoint_path = os.path.join(species_folder, str(episodes))
-                self.ac.critic.set_weights(weights[species_index].critic)
-                self.ac.actor.set_weights(weights[species_index].actor)
+                self.ac.actor.set_weights(weights[species_index].critic)
+                self.ac.critic.set_weights(weights[species_index].actor)
                 self.ac.save_weights(checkpoint_path)
                 new_weights[new_species_index] = deepcopy(weights[species_index])
+            weights = new_weights
 
         return weights, species_sampler, episodes, training_samples
 
