@@ -145,7 +145,7 @@ class FamilyRenderer:
         self.background = self.surface.copy()
         self.family_sizes = self._compute_family_sizes()
         self.fig, self.axs, self.line = None, None, None
-        self.colors = [(200, 0, 0), (0, 0, 200), (0, 100, 100), (0, 0, 0), (200, 200, 200)]
+        self.colors = [(200, 0, 0), (0, 0, 200), (255, 211, 0), (0, 0, 0), (200, 200, 200)]
         self.colors = [np.array(c, np.float32)/255 for c in self.colors]
 
     def _compute_family_sizes(self):

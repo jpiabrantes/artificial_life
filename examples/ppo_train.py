@@ -15,6 +15,7 @@ if not EAGER:
 load = False
 generation = 0
 epochs = 5000
+save_freq = 100
 
 # env
 config = env_default_config.copy()
@@ -32,7 +33,7 @@ entropy_coeff = 0.01
 population_size = 1
 
 # parallelism
-n_workers = 5
+n_workers = 1
 DEBUG = n_workers == 1
 ray.init(local_mode=DEBUG)
 
@@ -52,5 +53,5 @@ ac_mapping_fn = lambda agent_name: agent_name.split('_')[0]
 # train
 trainer = MultiAgentPPOTrainer(env_creator, ac_creators, ac_mapping_fn, seed=seed, gamma=gamma, lamb=lamb,
                                n_workers=n_workers, batch_size=batch_size, normalise_observation=True,
-                               entropy_coeff=entropy_coeff, normalise_advantages=True)
+                               entropy_coeff=entropy_coeff, normalise_advantages=True, save_freq=save_freq)
 trainer.train(epochs, load=load)
