@@ -78,7 +78,7 @@ class MultiAgentCOMATrainer:
         if get_number_of_gpus() > 0:
             trainer = ray.remote(num_gpus=1)(Trainer)
         else:
-            trainer = ray.remote()(Trainer)
+            trainer = ray.remote(Trainer)
         self.trainers = [trainer.remote(ac_creator, batch_size, normalise_advantages, train_pi_iters, train_v_iters,
                                         value_lr, pi_lr, env_creator, target_kl, clip_ratio, vf_clip_param,
                                         entropy_coeff)
