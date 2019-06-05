@@ -67,6 +67,9 @@ class DeadlyColony:
         self.dna_total_score = None
         self.average_population = None
 
+        self.attack_metrics = {'cannibalism_victim_age': None, 'cannibal_age': None, 'n_cannibalism_acts': None,
+                               'attacker_age': None, 'n_attacks': None, 'victim_age': None}
+
     @staticmethod
     def seed(seed=None):
         if seed is None:
@@ -80,6 +83,11 @@ class DeadlyColony:
 
         :return: obs (dict): New observations for each ready agent.
         """
+        for key in self.attack_metrics:
+            if 'n_' in key:
+                self.attack_metrics[key] = 0
+            else:
+                self.attack_metrics[key] = MeanTracker()
         if species_indices is None:
             species_indices = list(range(self.n_agents))
         Agent.id = 1
@@ -180,6 +188,7 @@ class DeadlyColony:
             info_dict['__all__'] = {'surplus': self.surplus.mean, 'babies_born': self.babies_born,
                                     'survivors': len(self.agents), 'life_expectancy': self.life_expectancy.mean,
                                     'average_population': self.average_population.mean}
+            info_dict['__all__'].update(self.attack_metrics)
             info_dict['founders_results'] = dna_results
             info_dict['founders_total_results'] = self.dna_total_score
         else:
@@ -265,7 +274,7 @@ class DeadlyColony:
                     break
             tile = self.tiles[row, col]
             Agent(row, col, self.birth_endowment, self.metabolism, self.fertility_age, self.infertility_age,
-                  self.longevity, tile, self.add_agent_callback, species_indices[i])
+                  self.longevity, tile, self.add_agent_callback, species_indices[i], self.attack_metrics)
 
     def _grow_sugar(self):
         self._state[:, :, Terrain.SUGAR] = np.minimum(self._state[:, :, Terrain.SUGAR]
@@ -361,8 +370,9 @@ class Agent:
     id = 1
 
     def __init__(self, row, col, endowment, metabolism, fertility_age, infertility_age, longevity, tile,
-                 bring_agent_to_world_fn, species_index, dna=None):
+                 bring_agent_to_world_fn, species_index, attack_metrics, dna=None):
         self.alive = True
+        self.attack_metrics = attack_metrics
         self.dna = Agent.id if dna is None else dna
         self.species_index = 0 if species_index is None else species_index
         self.id = '{}_{:d}'.format(species_index, Agent.id)
@@ -394,7 +404,7 @@ class Agent:
             if tile:
                 newborn = Agent(tile.row, tile.col, self.endowment, self.metabolism, self.fertility_age,
                                 self.infertility_age, self.longevity, tile, self.bring_agent_to_world_fn,
-                                self.species_index, self.dna)
+                                self.species_index, self.attack_metrics, self.dna)
                 return newborn
         return None
 
@@ -416,6 +426,16 @@ class Agent:
                 enemy.die()
             else:
                 loot = 0
+
+            # metrics
+            if enemy.dna == self.dna:
+                self.attack_metrics['cannibalism_victim_age'].add_value(enemy.age)
+                self.attack_metrics['cannibal_age'].add_value(self.age)
+                self.attack_metrics['n_cannibalism_acts'] += 1
+            else:
+                self.attack_metrics['attacker_age'].add_value(self.age)
+                self.attack_metrics['victim_age'].add_value(enemy.age)
+                self.attack_metrics['n_attacks'] += 1
             return loot
         return 0
 
