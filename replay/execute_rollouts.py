@@ -56,7 +56,7 @@ elif exp_name == 'MultiPPO':
     policies = {i: a for i, a in zip(species_indices, policies)}
 elif exp_name == 'COMA':
     ac = ac_creator()
-    weights, filters, species_sampler, episodes, training_samples = load_generation(ac_creator(), env, 0, 10)
+    weights, filters, species_sampler, episodes, training_samples = load_generation(ac_creator(), env, 1, 10)
     species_indices = species_sampler.sample(5).tolist()
     policies = {i: policy_creator() for i in species_indices}
     for species_index, policy in policies.items():
