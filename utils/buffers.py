@@ -25,15 +25,17 @@ class COMABuffer:
         self.act_buf = np.empty((size,) + action_space.shape, dtype=np.int32)
         self.adv_buf = np.empty(size, dtype=np.float32)
         self.rew_buf = np.empty(size, dtype=np.float32)
-        self.val_buf = np.empty(size, dtype=np.float32)
+        self.q_buf = np.empty(size, dtype=np.float32)
         self.log_probs_buf = np.empty(size, dtype=np.float32)
         self.pi_buf = np.empty((size, action_space.n), dtype=np.float32)
         self.loc_buf = np.empty((size, 2), dtype=np.int32)
-        self.td_buf = np.empty(size, dtype=np.int32)
+        self.dna_buf = np.empty(size, dtype=np.int32)
+        self.ret_buf = np.empty(size, dtype=np.float32)
+        self.ind_buf = np.empty(size, dtype=np.int32)
         self.path_start_idx, self.ptr, self.max_size = 0, 0, size
         self.gamma, self.lamb = gamma, lamb
 
-    def store(self, obs, act, rew, val, adv, log_p, pi, loc):
+    def store(self, obs, act, rew, q, adv, log_p, pi, loc, dna, ind):
         """
         Append one timestep of agent-environment interaction to the buffer.
         """
@@ -41,11 +43,13 @@ class COMABuffer:
         self.obs_buf[self.ptr] = obs
         self.act_buf[self.ptr] = act
         self.rew_buf[self.ptr] = rew
-        self.val_buf[self.ptr] = val
+        self.q_buf[self.ptr] = q
         self.adv_buf[self.ptr] = adv
         self.log_probs_buf[self.ptr] = log_p
         self.pi_buf[self.ptr] = pi
         self.loc_buf[self.ptr] = loc
+        self.dna_buf[self.ptr] = dna
+        self.ind_buf[self.ptr] = ind
         self.ptr += 1
 
     def finnish_path(self, last_value):
@@ -72,7 +76,7 @@ class COMABuffer:
         #delta = rews[:-1] + self.gamma * vals[1:] - vals[:-1]
         #self.td_buf[path_slice] = vals[:-1] + misc.discount_cumsum(delta, self.gamma * self.lamb)
         # the next line computes rewards-to-go, to be targets for the value function
-        self.td_buf[path_slice] = misc.discount_cumsum(rews[:-1], self.gamma)
+        self.ret_buf[path_slice] = misc.discount_cumsum(rews[:-1], self.gamma)
 
         self.path_start_idx = self.ptr
 
@@ -84,8 +88,9 @@ class COMABuffer:
         """
         to_idx = self.ptr
         self.ptr, self.path_start_idx = 0, 0
-        return (self.obs_buf[:to_idx], self.act_buf[:to_idx], self.adv_buf[:to_idx], self.td_buf[:to_idx],
-                self.log_probs_buf[:to_idx], self.loc_buf[:to_idx], self.pi_buf[:to_idx])
+        return (self.obs_buf[:to_idx], self.act_buf[:to_idx], self.adv_buf[:to_idx], self.ret_buf[:to_idx],
+                self.log_probs_buf[:to_idx], self.pi_buf[:to_idx], self.q_buf[:to_idx], self.loc_buf[:to_idx],
+                self.dna_buf[:to_idx], self.ind_buf[:to_idx])
 
 
 class PPOBuffer:

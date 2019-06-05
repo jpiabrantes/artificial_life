@@ -1,5 +1,6 @@
 from copy import deepcopy
 from time import time
+from collections import defaultdict
 
 import numpy as np
 # from cv2 import cvtColor, COLOR_HSV2RGB
@@ -10,7 +11,7 @@ from utils.misc import Enum, MeanTracker, Timer
 
 State = Enum(('SUGAR', 'AGENTS', 'AGE', 'AGENT_SUGAR', 'DNA'))
 Terrain = Enum(('SUGAR', 'AGENTS', 'AGE', 'AGENT_SUGAR', 'KINSHIP'))
-DNA_COLORS = {1: (200, 0, 0), 2: (0, 0, 200), 3: (0, 100, 100), 4: (0, 0, 0), 5: (255, 255, 255)}
+DNA_COLORS = {1: (200, 0, 0), 2: (0, 0, 200), 3: (255, 211, 100), 4: (0, 0, 0), 5: (255, 255, 255)}
 
 
 class BacteriaColony:
@@ -20,6 +21,8 @@ class BacteriaColony:
     reward_range = (0.0, float('inf'))
 
     def __init__(self, config):
+        self.family_reward_coeff = lambda agent_name: 0
+
         self.State = State
         self.Terrain = Terrain
 
@@ -40,7 +43,7 @@ class BacteriaColony:
 
         vision = config['vision']
         assert type(vision) is int, 'Vision needs to be an integer'
-        assert vision < min(self.n_rows//2, self.n_cols//2), "Vision cant be larger than half the grid world"
+        #assert vision < min(self.n_rows//2, self.n_cols//2), "Vision cant be larger than half the grid world"
         self.vision = vision
 
         self.action_space = Discrete(5)
@@ -123,6 +126,7 @@ class BacteriaColony:
         np.random.shuffle(action_items)
 
         # Agents act: move, harvest, eat, reproduce and age
+        family_reward = defaultdict(int)
         dna_map = self._state[:, :, State.DNA].copy()
         self.agent_dna = {}  # Keep a record of an agent dna (important if it dies)
         with Timer() as move_timer:
@@ -132,6 +136,10 @@ class BacteriaColony:
                 newborn, harvest, died = agent.step(action, self.n_rows, self.n_cols, self.tiles)
                 if self.greedy_reward:
                     reward_dict[agent_name] = harvest
+                    family_reward[agent.dna] += harvest
+                else:
+                    reward_dict[agent_name] = 1
+                    family_reward[agent.dna] += 1
                 if newborn:
                     self.babies_born += 1
                 if died:
@@ -156,15 +164,15 @@ class BacteriaColony:
             obs_dict = self._generate_observations()
         self.timers['observe'].add_value(observe_timer.interval)
 
-        if not self.greedy_reward:
-            # compute a reward for every agent that sent an action
-            dna_results = np.zeros((self.n_agents,), np.int)
-            dnas, counts = np.unique(dna_map[dna_map != 0], return_counts=True)
-            for dna, count in zip(dnas, counts):
-                dna_results[int(dna) - 1] = count
-                self.dna_total_score[int(dna) - 1] += count
-            for agent_name, dna in self.agent_dna.items():
-                reward_dict[agent_name] = dna_results[agent.dna - 1]
+        dna_results = np.zeros((self.n_agents,), np.int)
+        dnas, counts = np.unique(dna_map[dna_map != 0], return_counts=True)
+        for dna, count in zip(dnas, counts):
+            dna_results[int(dna) - 1] = count
+            self.dna_total_score[int(dna) - 1] += count
+
+        # add in the family reward
+        for agent_name, dna in self.agent_dna.items():
+            reward_dict[agent_name] += family_reward[dna]*self.family_reward_coeff(agent_name)
 
         # Check termination
         self.iter += 1
@@ -173,9 +181,8 @@ class BacteriaColony:
             info_dict['__all__'] = {'surplus': self.surplus.mean, 'babies_born': self.babies_born,
                                     'survivors': len(self.agents), 'life_expectancy': self.life_expectancy.mean,
                                     'average_population': self.average_population.mean}
-            if not self.greedy_reward:
-                info_dict['founders_results'] = dna_results
-                info_dict['founders_total_results'] = self.dna_total_score
+            info_dict['founders_results'] = dna_results
+            info_dict['founders_total_results'] = self.dna_total_score
         else:
             done_dict['__all__'] = False
 
@@ -250,8 +257,9 @@ class BacteriaColony:
         locations = set()
         for i in range(self.n_agents):
             while True:
-                row = np.random.randint(-10, 11)
-                col = self.n_cols//2 + int(np.round(np.sqrt(100-row**2)))*np.random.choice((-1, 1))
+                # TODO: change this initialisation
+                row = np.random.randint(-1, 2)
+                col = self.n_cols//2 + int(np.round(np.sqrt(4-row**2)))*np.random.choice((-1, 1))
                 row += self.n_rows//2
                 if (row, col) not in locations:
                     locations.add((row, col))

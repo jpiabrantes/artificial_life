@@ -61,9 +61,6 @@ class COMAActorCritic(kr.Model):
         self.actor = create_vision_and_fc_network(**actor_args)
         self.critic = create_global_critic(**critic_args)
 
-    def call(self, inputs):
-        return self.actor(inputs), self.critic(inputs)
-
     def action_logp_pi(self, obs):
         return self.actor.action_logp_pi(obs)
 
@@ -72,6 +69,11 @@ class COMAActorCritic(kr.Model):
         val = np.sum(qs*pi, axis=-1)
         adv = qs[np.arange(len(actions)), actions]-val
         return val, adv
+
+    @tf.function
+    def load_critic(self, weights):
+        for var, weight in zip(self.critic.variables, weights):
+            var.assign(weight)
 
 
 class PPOActorCritic(kr.Model):
@@ -105,7 +107,7 @@ def create_vision_and_fc_network(obs_input_shape, conv_sizes, fc_sizes, last_fc_
     fc = MLP(fc_sizes, 0, (None, fc_input_length))(fc_input)
 
     concat = kl.Concatenate(axis=-1)([flatten, fc])
-    out = MLP(last_fc_sizes, num_outputs, (None, None))(concat)
+    out = MLP(last_fc_sizes, num_outputs, (None, concat.shape[1]))(concat)
     if actor:
         return DiscreteActor(inputs=input_layer, outputs=[out])
     else:
@@ -123,10 +125,9 @@ def create_global_critic(input_shape, conv_sizes, fc_sizes, num_outputs):
     concat = kl.Concatenate(axis=-1)([non_actions, tf.reshape(one_hot, (-1, rows, cols, num_outputs))])
     vision_layer = concat
     for i, (filters, kernel, stride) in enumerate(conv_sizes):
-        vision_layer = kl.Conv2D(filters, kernel, stride, activation='relu')(vision_layer)
-        vision_layer = kl.MaxPool2D(pool_size=(2, 2))(vision_layer)
+        vision_layer = kl.Conv2D(filters, kernel, stride, activation='relu', dilation_rate=(i+1, i+1))(vision_layer)
 
     flatten = kl.Flatten()(vision_layer)
-    dense = MLP(fc_sizes, num_outputs, (None, None))(flatten)
+    dense = MLP(fc_sizes, num_outputs, (None, flatten.shape[1]))(flatten)
     return kr.Model(inputs=input_layer, outputs=[dense])
 
