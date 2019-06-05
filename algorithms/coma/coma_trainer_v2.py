@@ -215,7 +215,10 @@ class MultiAgentCOMATrainer:
 
         if generation == 0:
             species_sampler = SpeciesSampler(self.population_size, bias=1)
-            weights = [Weights(self.ac.actor.get_weights(), self.ac.critic.get_weights())]*self.population_size
+            weights = []
+            for _ in range(self.population_size):
+                ac = self.ac_creator()
+                weights.append(Weights(ac.actor.get_weights(), ac.critic.get_weights()))
             for species_index in range(self.population_size):
                 species_folder = os.path.join(generation_folder, str(species_index))
                 os.makedirs(species_folder, exist_ok=True)

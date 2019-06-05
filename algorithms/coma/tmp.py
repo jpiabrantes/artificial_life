@@ -29,7 +29,7 @@ ac_kwarg = {'actor_args': actor_args, 'critic_args': critic_args, 'observation_s
 # EAGER = False
 # if not EAGER:
 #     tf.compat.v1.disable_eager_execution()
-assert not tf.executing_eagerly()
+#assert not tf.executing_eagerly()
 
 
 
