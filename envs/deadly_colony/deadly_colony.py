@@ -188,7 +188,13 @@ class DeadlyColony:
             info_dict['__all__'] = {'surplus': self.surplus.mean, 'babies_born': self.babies_born,
                                     'survivors': len(self.agents), 'life_expectancy': self.life_expectancy.mean,
                                     'average_population': self.average_population.mean}
-            info_dict['__all__'].update(self.attack_metrics)
+            attack_metrics = {}
+            for k, v in self.attack_metrics.items():
+                if type(v) is int:
+                    attack_metrics[k] = v
+                else:
+                    attack_metrics[k] = v.mean
+            info_dict['__all__'].update(attack_metrics)
             info_dict['founders_results'] = dna_results
             info_dict['founders_total_results'] = self.dna_total_score
         else:
