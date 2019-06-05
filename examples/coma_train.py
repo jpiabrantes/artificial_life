@@ -2,14 +2,15 @@ import ray
 import numpy as np
 from multiprocessing import cpu_count
 
-from envs.bacteria_colony.bacteria_colony import BacteriaColony
-from envs.bacteria_colony.env_config import env_default_config
+# from envs.bacteria_colony.bacteria_colony import BacteriaColony
+# from envs.bacteria_colony.env_config import env_default_config
+from envs.deadly_colony.deadly_colony import DeadlyColony
+from envs.deadly_colony.env_config import env_default_config
 from models.base import COMAActorCritic
-# from algorithms.coma.coma_trainer import MultiAgentCOMATrainer
 from algorithms.coma.coma_trainer_v2 import MultiAgentCOMATrainer
 
 # training session
-generation = 1
+generation = 0
 epochs = 5000
 save_freq = 30
 load = False
@@ -17,15 +18,15 @@ load = False
 # env
 config = env_default_config.copy()
 config['greedy_reward'] = True
-env_creator = lambda: BacteriaColony(config)
+env_creator = lambda: DeadlyColony(config)
 env = env_creator()
 
 # algorithm
 gamma = 0.95
 lamb = 0.8  # lambda for TD(lambda)
 seed = 0
-sample_batch_size = 300*10
-batch_size = 250
+sample_batch_size = 30*10
+batch_size = 25
 entropy_coeff = 0.08
 population_size = 10
 update_target_freq = 1
