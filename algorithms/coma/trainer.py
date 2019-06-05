@@ -38,7 +38,7 @@ class Trainer:
             var.load(w)
 
         if self.normalize_advantages:
-            adv = adv / (np.std(adv) + 1e-8)  # (adv - np.mean(adv)) / (np.std(adv) + 1e-8)
+            adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-8) # adv / (np.std(adv) + 1e-8)
         act_adv_logs = np.concatenate([act[:, None], adv[:, None], old_log_probs[:, None]], axis=-1)
         with Timer() as pi_optimisation_timer:
             result = self.ac.actor.fit(obs, act_adv_logs, batch_size=self.batch_size, shuffle=True,
