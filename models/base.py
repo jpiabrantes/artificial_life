@@ -118,11 +118,12 @@ def create_global_critic(input_shape, conv_sizes, fc_sizes, num_outputs):
     num_outputs = num_outputs
     rows, cols, depth = input_shape
     input_layer = kl.Input(shape=(rows, cols, depth))
-    actions = tf.slice(input_layer, [0, 0, 0, depth - 1], [-1, rows, cols, 1])
+    actions = tf.squeeze(tf.slice(input_layer, [0, 0, 0, depth - 1], [-1, rows, cols, 1]), axis=-1)
     non_actions = tf.slice(input_layer, [0, 0, 0, 0], [-1, rows, cols, depth - 1])
     one_hot = kl.Lambda(lambda x: tf.one_hot(tf.cast(x, 'int32'), num_outputs),
                         input_shape=(rows, cols))(actions)
-    concat = kl.Concatenate(axis=-1)([non_actions, tf.reshape(one_hot, (-1, rows, cols, num_outputs))])
+    # concat = kl.Concatenate(axis=-1)([non_actions, tf.reshape(one_hot, (-1, rows, cols, num_outputs))])
+    concat = kl.Concatenate(axis=-1)([non_actions, one_hot])
     vision_layer = concat
     for i, (filters, kernel, stride) in enumerate(conv_sizes):
         vision_layer = kl.Conv2D(filters, kernel, stride, activation='relu')(vision_layer)
