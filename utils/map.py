@@ -37,7 +37,7 @@ def create_tiles_1(n_rows, n_cols, max_capacity):
 if __name__ == '__main__':
     import scipy.misc
     max_capacity = 2
-    growth_rate = 0.1
+    growth_rate = 0.2
     dirt = np.array((120., 72, 0)) / 255
     grass = np.array((85., 168, 74)) / 255
 
