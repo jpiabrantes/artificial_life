@@ -171,7 +171,8 @@ class DeadlyColony:
                 if victim:
                     self.life_expectancy.add_value(victim.age)
                     del self.agents[victim.id]
-                    done_dict[victim.id] = True
+                    if victim.id in action_dict:
+                        done_dict[victim.id] = True
         self.timers['move'].add_value(move_timer.interval)
 
         # Compute surplus stat
