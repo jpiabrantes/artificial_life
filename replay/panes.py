@@ -22,22 +22,12 @@ class GameRenderer:
         dict_ = self.g_variables.dicts[iter_]
         state = dict_['state']
         agent_dict = dict_['agents'][self.g_variables.following_agent_id]
-        agent_row, agent_col = agent_dict['row'], agent_dict['col']
-        img = self.env.render(state=state)
-        if self.g_variables.vision_mask:
-            vision_grid = np.arange(1 + 2 * self.env.vision) - self.env.vision
-            mask = np.ones((img.shape[0], img.shape[1]), np.bool)
-            rows = np.mod(agent_row + vision_grid, self.env.n_rows)
-            cols = np.mod(agent_col + vision_grid, self.env.n_cols)
-            mask[np.ix_(rows, cols)] = False
-            img[mask, :] = 0.5*img[mask, :]+0.5*np.array((0, 0, 0), np.float)
-        if self.g_variables.tracking:
-            zoom = self.g_variables.zoom
-            grid = np.arange(1 + 2 * zoom) - zoom
-            rows = np.mod(agent_row + grid, self.env.n_rows)
-            cols = np.mod(agent_col + grid, self.env.n_cols)
-            img = img[np.ix_(rows, cols)]
-        img = (img*255).astype(np.uint8)
+        track_location = (agent_dict['row'], agent_dict['col'])
+
+        tracking_dict = {'vision_mask': self.g_variables.vision_mask, 'tracking': self.g_variables.tracking,
+                         'track_location': track_location, 'zoom': self.g_variables.zoom}
+
+        img = self.env.render(state=state, tracking_dict=tracking_dict)
         img = np.array(Image.fromarray(img).resize((self.width, self.height), Image.NEAREST))
         pygame.surfarray.blit_array(self.surface, img.transpose(1, 0, 2))
 

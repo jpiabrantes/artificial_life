@@ -6,8 +6,8 @@ import pygame
 from replay.panes import BacteriaAttributeRenderer, PolicyRenderer, GameRenderer, FamilyRenderer
 
 
-HEIGHT = 512
-WIDTH = 1024
+HEIGHT = 1000
+WIDTH = 2000
 
 
 class GlobalVariables:
@@ -132,7 +132,7 @@ if __name__ == '__main__':
     from envs.deadly_colony.env_config import env_default_config
 
     env = DeadlyColony(env_default_config)
-    expname = 'MultiPPO'  # 'EvolutionStrategies' ,'MultiPPO'
+    expname = 'EvolutionStrategies'  # 'EvolutionStrategies' ,'MultiPPO'
 
     with open(os.path.join('./dicts', expname+'.pkl'), 'rb') as f:
         dicts = pickle.load(f)

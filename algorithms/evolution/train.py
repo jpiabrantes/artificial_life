@@ -89,7 +89,7 @@ if __name__ == '__main__':
         for i, group in enumerate(groups):
             i = i % n_workers
             worker = workers[i]
-            result_ids.append(worker.rollout.remote([solution_ids[j] for j in group], group))
+            result_ids.append(worker.rollout.remote([solution_ids[j] for j in group], group, generation))
         results = ray.get(result_ids)
         returns, horizons = zip(*results)
         negative_fitness_list = [np.zeros((popsize,), np.float32) for _ in range(n_agents)]
