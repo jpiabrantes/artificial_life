@@ -50,7 +50,7 @@ actor_args = {'conv_sizes': [(32, (3, 3), 1), (32, (3, 3), 1)],
 
 rows, cols, depth = env.critic_observation_shape
 depth += 1  # will give state-actions
-critic_args = {'conv_sizes': [(32, (8, 8), (4, 4)), (64, (4, 4), (2, 2)), (64, (3, 3), (1, 1))],
+critic_args = {'conv_sizes': [(32, (6, 6), (3, 3)), (64, (4, 4), (2, 2)), (64, (3, 3), (1, 1))],
                'fc_sizes': [512],
                'input_shape': (rows, cols, depth),
                'num_outputs': env.action_space.n}
