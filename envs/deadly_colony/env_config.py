@@ -10,5 +10,6 @@ env_default_config = {'n_rows': 50,
                       'longevity': 50,
                       'max_iters': 500,
                       'max_capacity': 4,
-                      'greedy_reward': False
+                      'greedy_reward': False,
+                      'update_stats': False
                       }

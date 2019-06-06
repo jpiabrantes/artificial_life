@@ -24,7 +24,7 @@ class Worker:
             self.filters = {}
         self.policies = [p_creator() for p_creator in policy_creators]
 
-    def rollout(self, weights_ids, pop_indices):
+    def rollout(self, weights_ids, pop_indices, generation):
         for policy, weight in zip(self.policies, ray.get(weights_ids)):
             policy.load_flat_array(weight)
         mean_fitness = defaultdict(int)
@@ -66,6 +66,10 @@ class Worker:
 
                 raw_obs_dict = n_raw_obs_dict
                 ep_len += 1
+
+            if generation < 40:
+                for score, pop_index in zip(info_dict['founders_total_results'], pop_indices):
+                    mean_fitness[pop_index] += score * 1/self.n_rollouts
             for score, pop_index in zip(info_dict['founders_results'], pop_indices):
                 mean_fitness[pop_index] += score * 1/self.n_rollouts
             mean_len += ep_len * 1/self.n_rollouts

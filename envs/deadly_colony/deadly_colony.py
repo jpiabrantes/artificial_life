@@ -3,7 +3,7 @@ from copy import deepcopy
 from time import time
 
 import numpy as np
-# from cv2 import cvtColor, COLOR_HSV2RGB
+from PIL import Image
 from gym.spaces import Box, Discrete
 
 from utils.map import create_tiles_1
@@ -27,6 +27,7 @@ class DeadlyColony:
         self.Terrain = Terrain
 
         # env parameters
+        self.update_stats = config['update_stats']
         self.n_rows = config['n_rows']
         self.n_cols = config['n_cols']
         self.sugar_growth_rate = config['sugar_growth_rate']
@@ -128,6 +129,9 @@ class DeadlyColony:
         - Agents (including children) observe
         """
         done_dict, reward_dict, info_dict = {}, {}, {}
+        if self.update_stats:
+            for agent_name, action in action_dict.items():
+                self.agents[agent_name].falsify_stats()
 
         # randomise the order in which actions are taken
         action_items = list(action_dict.items())
@@ -139,9 +143,10 @@ class DeadlyColony:
         self.agent_dna = {}  # Keep a record of an agent dna (important if it dies)
         with Timer() as move_timer:
             for agent_name, action in action_items:
+                movement = action % 5
                 agent = self.agents[agent_name]
                 self.agent_dna[agent_name] = agent.dna
-                newborn, harvest, died = agent.step(action, self.n_rows, self.n_cols, self.tiles)
+                newborn, harvest, died = agent.step(movement, self.n_rows, self.n_cols, self.tiles)
                 if self.greedy_reward:
                     reward_dict[agent_name] = harvest
                     family_reward[agent.dna] += harvest
@@ -156,6 +161,17 @@ class DeadlyColony:
                     done_dict[agent_name] = True
                 else:
                     done_dict[agent_name] = False
+
+            for agent_name, action in action_items:
+                attack = action // 5
+                victim, loot = agent.attack(attack)
+                if loot and self.greedy_reward:
+                    reward_dict[agent_name] += loot
+                    family_reward[self.agent_dna[agent_name]] += loot
+                if victim:
+                    self.life_expectancy.add_value(victim.age)
+                    del self.agents[victim.id]
+                    done_dict[victim.id] = True
         self.timers['move'].add_value(move_timer.interval)
 
         # Compute surplus stat
@@ -202,7 +218,9 @@ class DeadlyColony:
 
         return obs_dict, reward_dict, done_dict, info_dict
 
-    def render(self, state=None, mode='rgb_array'):
+    def render(self, state=None, mode='rgb_array', resolution=512, tracking_dict=None):
+        assert resolution >= 500
+        scale = resolution/self.n_cols
         if state is None:
             state = self._state
         if mode == 'rgb_array':
@@ -219,9 +237,43 @@ class DeadlyColony:
             s_rgb = norm_sugar*grass+(1-norm_sugar)*dirt
             mask = state[..., State.AGENTS] > 0
             s_rgb[mask] = a_rgb[mask]
-            return s_rgb
+            img = s_rgb
+
+            if tracking_dict:
+                agent_row, agent_col = tracking_dict['track_location']
+                if tracking_dict['vision_mask']:
+                    vision_grid = np.arange(1 + 2 * self.vision) - self.vision
+                    mask = np.ones((img.shape[0], img.shape[1]), np.bool)
+                    rows = np.mod(agent_row + vision_grid, self.n_rows)
+                    cols = np.mod(agent_col + vision_grid, self.n_cols)
+                    mask[np.ix_(rows, cols)] = False
+                    img[mask, :] = 0.5 * img[mask, :] + 0.5 * np.array((0, 0, 0), np.float)
+                if tracking_dict['tracking']:
+                    zoom = tracking_dict['zoom']
+                    grid = np.arange(1 + 2 * zoom) - zoom
+                    rows = np.mod(agent_row + grid, self.n_rows)
+                    cols = np.mod(agent_col + grid, self.n_cols)
+                    img = img[np.ix_(rows, cols)]
+                    state = state[np.ix_(rows, cols)]
+
+
+            img = np.array(Image.fromarray((img * 255).astype(np.uint8)).resize((resolution, resolution),
+                                                                                Image.NEAREST))
+            scale = self.n_rows/state.shape[0] * scale
+            mask = state[..., State.AGENTS] > 0
+            rows, cols = np.where(mask)
+            healths = state[mask, State.HEALTH]
+            for row, col, health in zip(rows, cols, healths):
+                left, top, width, height = [int(round(f)) for f in ((col+.05)*scale, (row+.05)*scale,
+                                                                    scale*0.9, scale*0.2)]
+                img[top: top+height, left: left+width, :] = np.array((0, 0, 255), np.uint8)
+                damage_width = int(round((1-health/6)*width))
+                img[top: top + height, left: left + damage_width, :] = np.array((255, 0, 0), np.uint8)
+
+            return img
         else:
             super(DeadlyColony, self).render(mode)
+
 
     def get_kinship_map(self, agent_name):
         """
@@ -262,6 +314,8 @@ class DeadlyColony:
             obs[:, :, Terrain.KINSHIP] = kinship_grid[np.ix_(rows, cols)]
 
             family_size = kinship_grid.sum()
+            if self.update_stats:
+                agent.family_size = family_size
             n_entities = len(self.agents)
             fc_obs = np.array((family_size, agent.row, agent.col, n_entities))
             obs_dict[key] = np.hstack((obs.ravel(), fc_obs))
@@ -393,6 +447,23 @@ class Agent:
         bring_agent_to_world_fn(self)
         tile.add_agent(self)
 
+        # for stats purposes
+        self.family_size = None
+        self.attacked = None
+        self.kill = None
+        self.victim = None
+        self.cannibal_attack = None
+        self.cannibal_kill = None
+        self.cannibal_victim = None
+
+    def falsify_stats(self):
+        self.attacked = False
+        self.kill = False
+        self.victim = False
+        self.cannibal_attack = False
+        self.cannibal_kill = False
+        self.cannibal_victim = False
+
     def to_dict(self):
         to_delete = {'bring_agent_to_world_fn', 'tile'}
         to_store = set(self.__dict__.keys()).difference(to_delete)
@@ -417,32 +488,38 @@ class Agent:
         self.alive = False
         self.tile.remove_agent(self)
 
-    def _attack(self):
-        enemy = self.tile.find_random_neighbour()
-        if enemy is not None:
-            enemy.health -= 2
-            if enemy.health <= 0:
-                loot = enemy.sugar * 0.8
-                enemy.die()
-            else:
-                loot = 0
+    def attack(self, attack):
+        victim, loot = None, 0
+        if self.alive and attack:
+            enemy = self.tile.find_random_neighbour()
+            if enemy is not None:
+                enemy.health -= 2
+                if enemy.health <= 0:
+                    loot = enemy.sugar * 0.8
+                    enemy.die()
+                    victim = enemy
+                else:
+                    loot = 0
+                self.sugar += loot
+                # metrics
+                if enemy.dna == self.dna:
+                    self.cannibal_attack = True
+                    self.cannibal_kill = enemy.health <= 0
+                    enemy.cannibal_victim = True
+                    self.attack_metrics['cannibalism_victim_age'].add_value(enemy.age)
+                    self.attack_metrics['cannibal_age'].add_value(self.age)
+                    self.attack_metrics['n_cannibalism_acts'] += 1
+                else:
+                    self.attacked = True
+                    self.kill = enemy.health <= 0
+                    enemy.victim = True
+                    self.attack_metrics['attacker_age'].add_value(self.age)
+                    self.attack_metrics['victim_age'].add_value(enemy.age)
+                    self.attack_metrics['n_attacks'] += 1
+        return victim, loot
 
-            # metrics
-            if enemy.dna == self.dna:
-                self.attack_metrics['cannibalism_victim_age'].add_value(enemy.age)
-                self.attack_metrics['cannibal_age'].add_value(self.age)
-                self.attack_metrics['n_cannibalism_acts'] += 1
-            else:
-                self.attack_metrics['attacker_age'].add_value(self.age)
-                self.attack_metrics['victim_age'].add_value(enemy.age)
-                self.attack_metrics['n_attacks'] += 1
-            return loot
-        return 0
-
-    def step(self, action, n_rows, n_cols, tiles):
+    def step(self, movement, n_rows, n_cols, tiles):
         if self.alive:
-            movement = action % 5
-            attack = action // 5
             assert movement in range(5), "Action needs to be an int between 0 and 4"
             if movement != 4:  # if agent moving
                 new_row, new_col = self.row, self.col
@@ -461,11 +538,7 @@ class Agent:
                     self.tile.remove_agent(self)
                     self.tile = new_tile
                     self.row, self.col = new_row, new_col
-            if attack:
-                loot = self._attack()
-            else:
-                loot = 0
-            harvest = self.tile.harvest(self) + loot
+            harvest = self.tile.harvest(self)
             self.sugar += harvest - self.metabolism
             newborn = self._reproduce()
             if newborn:
