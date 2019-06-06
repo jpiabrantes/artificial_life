@@ -163,17 +163,18 @@ class DeadlyColony:
                     done_dict[agent_name] = False
 
             for agent_name, action in action_items:
-                attack = action // 5
-                agent = self.agents[agent_name]
-                victim, loot = agent.attack(attack)
-                if loot and self.greedy_reward:
-                    reward_dict[agent_name] += loot
-                    family_reward[self.agent_dna[agent_name]] += loot
-                if victim:
-                    self.life_expectancy.add_value(victim.age)
-                    del self.agents[victim.id]
-                    if victim.id in action_dict:
-                        done_dict[victim.id] = True
+                if agent_name in self.agents:
+                    agent = self.agents[agent_name]
+                    attack = action // 5
+                    victim, loot = agent.attack(attack)
+                    if loot and self.greedy_reward:
+                        reward_dict[agent_name] += loot
+                        family_reward[self.agent_dna[agent_name]] += loot
+                    if victim:
+                        self.life_expectancy.add_value(victim.age)
+                        del self.agents[victim.id]
+                        if victim.id in action_dict:
+                            done_dict[victim.id] = True
         self.timers['move'].add_value(move_timer.interval)
 
         # Compute surplus stat
