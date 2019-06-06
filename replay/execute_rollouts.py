@@ -1,8 +1,12 @@
 import tensorflow as tf
 import numpy as np
 
-from envs.bacteria_colony.bacteria_colony import BacteriaColony
-from envs.bacteria_colony.env_config import env_default_config
+# from envs.bacteria_colony.bacteria_colony import BacteriaColony
+# from envs.bacteria_colony.env_config import env_default_config
+
+from envs.deadly_colony.deadly_colony import DeadlyColony
+from envs.deadly_colony.env_config import env_default_config
+
 from models.base import create_vision_and_fc_network, COMAActorCritic
 from replay.rollout import rollout
 
@@ -12,7 +16,9 @@ from algorithms.coma.coma_trainer import load_generation
 
 
 # env
-env = BacteriaColony(env_default_config)
+# env = BacteriaColony(env_default_config)
+env = DeadlyColony(env_default_config)
+
 
 # actor
 policy_args = {'conv_sizes': [(32, (3, 3), 1), (32, (3, 3), 1)],
@@ -36,7 +42,7 @@ ac_kwarg = {'actor_args': policy_args, 'critic_args': critic_args, 'observation_
 ac_creator = lambda: COMAActorCritic(**ac_kwarg)
 
 
-exp_name = 'COMA'
+exp_name = 'MultiPPO'
 if exp_name == 'EvolutionStrategies':
     last_generation, mu0_list, stds_list, horizons_list, returns_list, filters = load_variables(env)
     obs_filter = filters['MeanStdFilter']
@@ -47,7 +53,7 @@ if exp_name == 'EvolutionStrategies':
         actor.load_flat_array(mu0)
         policies[species_index] = actor
 elif exp_name == 'MultiPPO':
-    checkpoint_folder = '../examples/checkpoints/{}/1'
+    checkpoint_folder = '../examples/checkpoints/{}/5'
     checkpoint_path = tf.train.latest_checkpoint(checkpoint_folder)
     species_indices = list(range(5))
     policies = [policy_creator() for _ in species_indices]
@@ -56,7 +62,7 @@ elif exp_name == 'MultiPPO':
     policies = {i: a for i, a in zip(species_indices, policies)}
 elif exp_name == 'COMA':
     ac = ac_creator()
-    weights, filters, species_sampler, episodes, training_samples = load_generation(ac_creator(), env, 1, 10)
+    weights, filters, species_sampler, episodes, training_samples = load_generation(ac_creator(), env, 0, 10)
     species_indices = species_sampler.sample(5).tolist()
     policies = {i: policy_creator() for i in species_indices}
     for species_index, policy in policies.items():
