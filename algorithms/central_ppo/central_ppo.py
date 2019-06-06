@@ -99,7 +99,7 @@ class CentralPPOTrainer:
     def train(self, epochs, generation, load=False):
         with tf.device('/cpu:0'):
             generation_folder = os.path.join(self.algorithm_folder, 'checkpoints', self.env.name, str(generation))
-            tensorboard_folder = os.path.join(generation_folder, 'tensorboard', 'coma_%d' % time())
+            tensorboard_folder = os.path.join(generation_folder, 'tensorboard', 'central_ppo_%d' % time())
             if load:
                 weights, self.filters, species_sampler, episodes, training_samples = load_generation(self.ac, self.env,
                                                                                                      generation,
@@ -108,7 +108,6 @@ class CentralPPOTrainer:
                 weights, species_sampler, episodes, training_samples = self._create_generation(generation_folder,
                                                                                                generation)
             target_weights = [w.critic.copy() for w in weights]
-            weights_id_list = [ray.put(w) for w in weights]
 
             species_trained_epochs = defaultdict(int)
             species_buffers = {}
@@ -117,6 +116,8 @@ class CentralPPOTrainer:
                 if generation > -1:
                     self.set_family_reward_coeffs(epoch)
                 total_time = time()
+                weights_id_list = [ray.put(Weights(actor=w.actor, critic=t_w)) for w, t_w in
+                                   zip(weights, target_weights)]
                 with Timer() as sampling_time:
                     results_list = ray.get([worker.rollout.remote(weights_id_list) for worker in self.samplers])
                 self.filter_manager.synchronize(self.filters, self.samplers)
@@ -146,8 +147,6 @@ class CentralPPOTrainer:
                         target_weights[species_index] = updated_weights.critic
                         print('Updated target weights!')
                     weights[species_index] = Weights(actor=updated_weights.actor, critic=updated_weights.critic)
-                    weights_id_list[species_index] = ray.put(Weights(weights[species_index].actor,
-                                                                     target_weights[species_index]))
                     if (species_trained_epochs[species_index] % self.save_freq) == self.save_freq - 1 or epoch == epochs-1:
                         self.ac.critic.set_weights(updated_weights.critic)
                         self.ac.actor.set_weights(updated_weights.actor)
