@@ -22,7 +22,7 @@ env_creator = lambda: DeadlyColony(config)
 env = env_creator()
 
 # algorithm
-gamma = 0.95
+gamma = 0.99
 lamb = 0.8  # lambda for TD(lambda)
 seed = 0
 sample_batch_size = 30*10
