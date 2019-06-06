@@ -164,6 +164,7 @@ class DeadlyColony:
 
             for agent_name, action in action_items:
                 attack = action // 5
+                agent = self.agents[agent_name]
                 victim, loot = agent.attack(attack)
                 if loot and self.greedy_reward:
                     reward_dict[agent_name] += loot

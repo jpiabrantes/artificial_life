@@ -8,7 +8,7 @@ import numpy as np
 from utils.misc import agent_name_to_policy_index
 
 this_folder = os.path.dirname(os.path.abspath(__file__))
-columns = ['age', 'health', 'sugar', 'family_size', 'attack', 'kill', 'victim', 'cannibal_attack', 'cannibal_kill',
+columns = ['age', 'health', 'sugar', 'family_size', 'attacked', 'kill', 'victim', 'cannibal_attack', 'cannibal_kill',
            'cannibal_victim', 'species_index']
 
 

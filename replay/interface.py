@@ -132,7 +132,7 @@ if __name__ == '__main__':
     from envs.deadly_colony.env_config import env_default_config
 
     env = DeadlyColony(env_default_config)
-    expname = 'EvolutionStrategies'  # 'EvolutionStrategies' ,'MultiPPO'
+    expname = 'MultiPPO'  # 'EvolutionStrategies' ,'MultiPPO'
 
     with open(os.path.join('./dicts', expname+'.pkl'), 'rb') as f:
         dicts = pickle.load(f)
