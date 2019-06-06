@@ -92,7 +92,7 @@ class MultiAgentCOMATrainer:
                                         population_size, normalise_observation) for i in range(n_workers)]
 
     def set_family_reward_coeffs(self, epoch):
-        coeff = 1-np.exp(-epoch/250)
+        coeff = 1  # 1-np.exp(-epoch/250)
         coeff_dict = {k: coeff for k in range(1, self.population_size)}
         coeff_dict[0] = 0.
         for sampler in self.samplers:
@@ -115,7 +115,7 @@ class MultiAgentCOMATrainer:
             species_buffers = {}
             train_summary_writer = tf.summary.create_file_writer(tensorboard_folder)
             for epoch in range(epochs):
-                if generation > 0:
+                if generation > -1:
                     self.set_family_reward_coeffs(epoch)
                 total_time = time()
                 with Timer() as sampling_time:

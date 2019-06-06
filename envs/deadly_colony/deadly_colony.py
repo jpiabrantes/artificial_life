@@ -11,7 +11,7 @@ from utils.misc import Enum, MeanTracker, Timer
 
 State = Enum(('SUGAR', 'AGENTS', 'AGE', 'AGENT_SUGAR', 'HEALTH', 'DNA'))
 Terrain = Enum(('SUGAR', 'AGENTS', 'AGE', 'AGENT_SUGAR', 'HEALTH', 'KINSHIP'))
-DNA_COLORS = {1: (200, 0, 0), 2: (0, 0, 200), 3: (0, 100, 100), 4: (0, 0, 0), 5: (255, 255, 255)}
+DNA_COLORS = {1: (200, 0, 0), 2: (0, 0, 200), 3: (255, 211, 0), 4: (0, 0, 0), 5: (255, 255, 255)}
 
 
 class DeadlyColony:
@@ -268,19 +268,13 @@ class DeadlyColony:
         return obs_dict
 
     def _create_agents(self, species_indices):
-        locations = set()
-        for i in range(self.n_agents):
-            while True:
-                # TODO: change this initialisation
-                row = np.random.randint(-1, 2)
-                col = self.n_cols//2 + int(np.round(np.sqrt(4-row**2)))*np.random.choice((-1, 1))
-                row += self.n_rows//2
-                if (row, col) not in locations:
-                    locations.add((row, col))
-                    break
+        locations = np.random.choice(np.arange(self.n_rows*self.n_cols), size=self.n_agents, replace=False)
+        for species_index, loc in zip(species_indices, locations):
+            row = loc // self.n_cols
+            col = loc % self.n_cols
             tile = self.tiles[row, col]
             Agent(row, col, self.birth_endowment, self.metabolism, self.fertility_age, self.infertility_age,
-                  self.longevity, tile, self.add_agent_callback, species_indices[i], self.attack_metrics)
+                  self.longevity, tile, self.add_agent_callback, species_index, self.attack_metrics)
 
     def _grow_sugar(self):
         self._state[:, :, Terrain.SUGAR] = np.minimum(self._state[:, :, Terrain.SUGAR]

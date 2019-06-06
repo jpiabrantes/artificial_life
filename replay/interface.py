@@ -125,10 +125,13 @@ class GameController:
 clock = pygame.time.Clock()
 fps = 24
 if __name__ == '__main__':
-    from envs.bacteria_colony.bacteria_colony import BacteriaColony
-    from envs.bacteria_colony.env_config import env_default_config
+    # from envs.bacteria_colony.bacteria_colony import BacteriaColony
+    # from envs.bacteria_colony.env_config import env_default_config
 
-    env = BacteriaColony(env_default_config)
+    from envs.deadly_colony.deadly_colony import DeadlyColony
+    from envs.deadly_colony.env_config import env_default_config
+
+    env = DeadlyColony(env_default_config)
     expname = 'MultiPPO'  # 'EvolutionStrategies' ,'MultiPPO'
 
     with open(os.path.join('./dicts', expname+'.pkl'), 'rb') as f:
