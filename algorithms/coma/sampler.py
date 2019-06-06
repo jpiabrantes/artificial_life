@@ -114,15 +114,14 @@ class Sampler:
                         if done_dict[agent_name]:  # if entity died
                             kinship_map = self.env.get_kinship_map(agent_name)
                             if np.any(kinship_map > 0):
-                                last_value = 0  # 1/np.sum(kinship_map)*(kinship_map*val_map).sum()
+                                last_value = 1/np.sum(kinship_map)*(kinship_map*val_map).sum()
                             else:
                                 last_value = 0
                             buf.finnish_path(last_value)
                         # if entity is alive but episode is over or we're done sampling
                         elif done_dict['__all__']:
                             # infinite episode
-                            # buf.finnish_path(val)
-                            buf.finnish_path(0)
+                            buf.finnish_path(val)
                         elif done_sampling:
                             buf.finnish_path(val)
 
