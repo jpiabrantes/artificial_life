@@ -11,14 +11,17 @@ from algorithms.evolution.es import CMAES
 from models.base import create_vision_and_fc_network
 from algorithms.evolution.helpers import load_variables
 from utils.filters import FilterManager, MeanStdFilter
-from envs.bacteria_colony.bacteria_colony import BacteriaColony
-from envs.bacteria_colony.env_config import env_default_config
+
+# from envs.bacteria_colony.bacteria_colony import BacteriaColony
+# from envs.bacteria_colony.env_config import env_default_config
+from envs.deadly_colony.deadly_colony import DeadlyColony
+from envs.deadly_colony.env_config import env_default_config
 
 eager = False
 if not eager:
     tf.compat.v1.disable_eager_execution()
 
-env_creator = lambda: BacteriaColony(env_default_config)
+env_creator = lambda: DeadlyColony(env_default_config)
 env = env_creator()
 policy_args = {'conv_sizes': [(32, (3, 3), 1), (32, (3, 3), 1)],
                'fc_sizes': [16],
@@ -31,14 +34,14 @@ policy_args = {'conv_sizes': [(32, (3, 3), 1), (32, (3, 3), 1)],
 policy_creator = lambda: create_vision_and_fc_network(**policy_args)
 po = policy_creator()
 rollouts_per_group = 1
-popsize = 20
-n_groups_per_sample = 1
+popsize = 65
+n_groups_per_sample = 10
 n_agents = 5
 std0_list = [1.0]*n_agents
 seed = 0
 generations = 1000
 save_freq = 10
-n_workers = 1 #cpu_count()
+n_workers = 40 #cpu_count()
 load = True
 assert popsize % n_agents == 0, 'population size must be a multiple of n_agents'
 
