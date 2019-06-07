@@ -13,6 +13,7 @@ from replay.rollout import rollout
 from algorithms.evolution.helpers import load_variables
 from algorithms.ppo.multi_ppo import load_models_and_filters
 from algorithms.coma.coma_trainer import load_generation
+from algorithms.central_ppo.central_ppo import load_generation as central_load_generation
 
 
 # env
@@ -35,16 +36,16 @@ policy_creator = lambda: create_vision_and_fc_network(**policy_args)
 # coma actor-critic
 rows, cols, depth = env.critic_observation_shape
 depth += 1  # will give state-actions
-critic_args = {'conv_sizes': [(32, (2, 2), 1), (16, (2, 2), 1), (4, (2, 2), 1)],
-               'fc_sizes': [128, 32],
+critic_args = {'conv_sizes': [(32, (6, 6), (3, 3)), (64, (4, 4), (2, 2)), (64, (3, 3), (1, 1))],
+               'fc_sizes': [512],
                'input_shape': (rows, cols, depth),
-               'num_outputs': env.action_space.n}
+               'num_outputs': 1}
 
 ac_kwarg = {'actor_args': policy_args, 'critic_args': critic_args, 'observation_space': env.observation_space}
 ac_creator = lambda: COMAActorCritic(**ac_kwarg)
 
 
-exp_name = 'MultiPPO'
+exp_name = 'CENTRAL_PPO'
 if exp_name == 'EvolutionStrategies':
     last_generation, mu0_list, stds_list, horizons_list, returns_list, filters = load_variables(env)
     obs_filter = filters['MeanStdFilter']
@@ -65,6 +66,16 @@ elif exp_name == 'MultiPPO':
 elif exp_name == 'COMA':
     ac = ac_creator()
     weights, filters, species_sampler, episodes, training_samples = load_generation(ac_creator(), env, 0, 10)
+    species_indices = species_sampler.sample(5).tolist()
+    policies = {i: policy_creator() for i in species_indices}
+    for species_index, policy in policies.items():
+        policy.set_weights(weights[species_index].actor)
+    obs_filter = filters['ActorObsFilter']
+    print(policies)
+    print(species_indices)
+elif exp_name == 'CENTRAL_PPO':
+    ac = ac_creator()
+    weights, filters, species_sampler, episodes, training_samples = central_load_generation(ac_creator(), env, 0, 10)
     species_indices = species_sampler.sample(5).tolist()
     policies = {i: policy_creator() for i in species_indices}
     for species_index, policy in policies.items():
