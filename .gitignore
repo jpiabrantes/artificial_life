@@ -1,3 +1,4 @@
+checkpoints_old/
 replay/data/
 replay/dicts/
 checkpoints_no_weight_decay/
