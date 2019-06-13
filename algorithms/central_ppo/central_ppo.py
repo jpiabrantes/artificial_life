@@ -90,9 +90,12 @@ class CentralPPOTrainer:
                                         population_size, normalise_observation) for i in range(n_workers)]
 
     def set_family_reward_coeffs(self, epoch):
-        coeff = 1  # 1-np.exp(-epoch/250)
-        coeff_dict = {k: coeff for k in range(1, self.population_size)}
-        coeff_dict[0] = 0.
+        coeff_dict = {}
+        for species_index in range(self.population_size):
+            if species_index > 2:
+                coeff_dict[species_index] = 1
+            else:
+                coeff_dict[species_index] = 0
         for sampler in self.samplers:
             sampler.set_family_reward_coeff.remote(coeff_dict)
 

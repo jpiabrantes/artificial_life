@@ -32,6 +32,14 @@ class GlobalVariables:
         index = (step + self.agent_names.index(self.following_agent_id)) % len(self.agent_names)
         self.following_agent_id = self.agent_names[index]
 
+    def click(self, pos):
+        x, y = pos
+        row, col = int(y*50/HEIGHT), int(x*50/HEIGHT)
+        dict_ = dicts[self.iter]
+        for agent_name, agent_dict in dict_['agents'].items():
+            if agent_dict['row'] == row and agent_dict['col'] == col:
+                self.following_agent_id = agent_name
+
     def scroll(self, step):
         self.zoom = max(min(self.zoom+step, 24), 2)
 
@@ -109,7 +117,9 @@ class GameController:
                 clock.tick(fps)
 
     def _handle_mouse_event(self, event):
-        if event.button == 4:
+        if event.button == 1:
+            self.g_struct.click(event.pos)
+        elif event.button == 4:
             self.g_struct.scroll(-1)
         elif event.button == 5:
             self.g_struct.scroll(1)
@@ -132,7 +142,7 @@ if __name__ == '__main__':
     from envs.deadly_colony.env_config import env_default_config
 
     env = DeadlyColony(env_default_config)
-    expname = 'CENTRAL_PPO'  # 'EvolutionStrategies' ,'MultiPPO'
+    expname = 'mix'  # 'EvolutionStrategies' ,'MultiPPO'
 
     with open(os.path.join('./dicts', expname+'.pkl'), 'rb') as f:
         dicts = pickle.load(f)

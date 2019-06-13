@@ -11,7 +11,7 @@ from utils.misc import Enum, MeanTracker, Timer
 
 State = Enum(('SUGAR', 'AGENTS', 'AGE', 'AGENT_SUGAR', 'HEALTH', 'DNA'))
 Terrain = Enum(('SUGAR', 'AGENTS', 'AGE', 'AGENT_SUGAR', 'HEALTH', 'KINSHIP'))
-DNA_COLORS = {1: (200, 0, 0), 2: (0, 0, 200), 3: (255, 211, 0), 4: (0, 0, 0), 5: (255, 255, 255)}
+DNA_COLORS = {1: (255, 255, 0), 2: (0, 255, 255), 3: (255, 0, 255), 4: (0, 0, 0), 5: (255, 255, 255)}
 
 
 class DeadlyColony:

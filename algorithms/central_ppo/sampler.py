@@ -112,7 +112,7 @@ class Sampler:
                         val = val_map[loc[0], loc[1]]
                         if done_dict[agent_name]:  # if entity died
                             kinship_map = self.env.get_kinship_map(agent_name)
-                            if np.any(kinship_map > 0):
+                            if agent_name_to_species_index_fn(agent_name) > 5 and np.any(kinship_map > 0):
                                 last_value = 1/np.sum(kinship_map)*(kinship_map*val_map).sum()
                             else:
                                 last_value = 0

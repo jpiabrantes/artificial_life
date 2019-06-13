@@ -45,7 +45,7 @@ ac_kwarg = {'actor_args': policy_args, 'critic_args': critic_args, 'observation_
 ac_creator = lambda: COMAActorCritic(**ac_kwarg)
 
 
-exp_name = 'CENTRAL_PPO'
+exp_name = 'mix'
 if exp_name == 'EvolutionStrategies':
     last_generation, mu0_list, stds_list, horizons_list, returns_list, filters = load_variables(env)
     obs_filter = filters['MeanStdFilter']
@@ -75,7 +75,7 @@ elif exp_name == 'COMA':
     print(species_indices)
 elif exp_name == 'CENTRAL_PPO':
     ac = ac_creator()
-    weights, filters, species_sampler, episodes, training_samples = central_load_generation(ac_creator(), env, 0, 10)
+    weights, filters, species_sampler, episodes, training_samples = central_load_generation(ac_creator(), env, 3, 10)
     species_indices = species_sampler.sample(5).tolist()
     policies = {i: policy_creator() for i in species_indices}
     for species_index, policy in policies.items():
@@ -84,7 +84,30 @@ elif exp_name == 'CENTRAL_PPO':
     print(policies)
     print(species_indices)
 else:
-    raise Exception()
+    print('passing')
+
+
+last_generation, mu0_list, stds_list, horizons_list, returns_list, filters = load_variables(env)
+obs_filter = filters['MeanStdFilter']
+actor = policy_creator()
+actor.load_flat_array(mu0_list[0])
+policies = {0: actor}
+
+
+ac = ac_creator()
+for i in range(1, 4):
+    weights, filters, species_sampler, episodes, training_samples = central_load_generation(ac_creator(), env, i, 10)
+    species_index = np.argmax(species_sampler.rs.mean)
+    policies[i] = policy_creator()
+    policies[i].set_weights(weights[species_index].actor)
+obs_filter = filters['ActorObsFilter']
+
+
+actor = policy_creator()
+actor.load_flat_array(mu0_list[1])
+policies[4] = actor
+species_indices = list(range(5))
+
 
 ep_len, population_integral = rollout(env, exp_name, policies, species_indices, obs_filter)
 print('Episode length: ', ep_len)
