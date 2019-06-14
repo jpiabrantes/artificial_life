@@ -20,7 +20,7 @@ def agent_name_to_species_index_fn(agent_name):
 @ray.remote(num_cpus=1)
 class Sampler:
     def __init__(self, sample_batch_size, gamma, lamb, env_creator, ac_creator, worker_index, population_size,
-                 normalise_observation=False):
+                 normalise_observation, uniform_sample):
         self.index = worker_index
         self.sample_batch_size = sample_batch_size
         self.gamma = gamma
@@ -40,7 +40,7 @@ class Sampler:
         else:
             self.filters = {}
 
-        self.species_sampler = SpeciesSampler(population_size)
+        self.species_sampler = SpeciesSampler(population_size, uniform_sample=uniform_sample)
         self.in_an_episode = False
         self.state = None
         self.ep_stats = EpStats()
@@ -109,7 +109,6 @@ class Sampler:
                         buf, rew = agent_buffers[agent_name], reward_dict[agent_name]
                         ep_ret += rew
                         buf.store(obs, action, rew, val, log_prob, state_action)
-                        val = val_map[loc[0], loc[1]]
                         if done_dict[agent_name]:  # if entity died
                             kinship_map = self.env.get_kinship_map(agent_name)
                             if agent_name_to_species_index_fn(agent_name) > 5 and np.any(kinship_map > 0):

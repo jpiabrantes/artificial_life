@@ -3,12 +3,12 @@ import tensorflow as tf
 import tensorflow.keras as kr
 
 from utils.misc import Timer, Weights
-from utils.metrics import get_kl_metric, explained_variance, EarlyStoppingKL, entropy
+from utils.metrics import get_kl_metric, ppo_explained_variance, EarlyStoppingKL, entropy
 
 
 class Trainer:
     def __init__(self, ac_creator, batch_size, normalize_advantages, train_pi_iters, train_v_iters, value_lr, pi_lr,
-                 env_creator, target_kl, clip_ratio, entropy_coeff):
+                 env_creator, target_kl, clip_ratio, entropy_coeff, vf_clip_param):
         self.batch_size = batch_size
         self.normalize_advantages = normalize_advantages
         self.train_pi_iters = train_pi_iters
@@ -16,6 +16,7 @@ class Trainer:
         self.clip_ratio = clip_ratio
         self.env = env_creator()
         self.entropy_coeff = entropy_coeff
+        self.vf_clip_param = vf_clip_param
 
         kl = get_kl_metric(self.env.action_space.n)
         self.actor_callbacks = [EarlyStoppingKL(target_kl)]
@@ -23,12 +24,12 @@ class Trainer:
         self._pi_optimisation_time, self._v_optimisation_time, self._species_stats = None, None, None
         self.ac = ac_creator()
         self.ac.critic.compile(optimizer=kr.optimizers.Adam(learning_rate=value_lr), loss=self._value_loss,
-                               metrics=[explained_variance])
+                               metrics=[ppo_explained_variance])
         self.ac.actor.compile(optimizer=kr.optimizers.Adam(learning_rate=pi_lr), loss=self._surrogate_loss,
                               metrics=[kl, entropy])
 
     def train(self, weights, variables, species_index):
-        obs, act, adv, ret, old_log_probs, state_action = variables
+        obs, act, adv, ret, old_log_probs, state_action, val = variables
 
         for var, w in zip(self.ac.actor.variables, weights.actor):
             var.load(w)
@@ -46,17 +47,18 @@ class Trainer:
             old_entropy = result.history['entropy'][0]
             kl = result.history['kl'][-1]
 
+        ret_val = np.concatenate([ret[:, None], val[:, None]], axis=-1)
         with Timer() as v_optimisation_timer:
-            result = self.ac.critic.fit(state_action, ret, shuffle=True, batch_size=self.batch_size,
+            result = self.ac.critic.fit(state_action, ret_val, shuffle=True, batch_size=self.batch_size,
                                         verbose=False, epochs=self.train_v_iters)
             old_value_loss = result.history['loss'][0]
             value_loss = result.history['loss'][-1]
-            old_explained_variance = result.history['explained_variance'][0]
-            explained_variance = result.history['explained_variance'][-1]
+            old_explained_variance = result.history['ppo_explained_variance'][0]
+            explained_variance = result.history['ppo_explained_variance'][-1]
 
         self._pi_optimisation_time = pi_optimisation_timer.interval
         self._v_optimisation_time = v_optimisation_timer.interval
-        key_value_pairs = [('LossQ', old_value_loss), ('deltaQLoss', old_value_loss - value_loss),
+        key_value_pairs = [('LossV', old_value_loss), ('deltaVLoss', old_value_loss - value_loss),
                            ('Old Explained Variance', old_explained_variance),
                            ('Explained variance', explained_variance),
                            ('KL', kl), ('Old entropy', old_entropy), ('LossPi', old_policy_loss),
@@ -64,8 +66,14 @@ class Trainer:
         self._species_stats = {'%s_%s' % (species_index, k): v for k, v in key_value_pairs}
         return Weights(self.ac.actor.get_weights(), self.ac.critic.get_weights())
 
-    def _value_loss(self, returns, values):
-        return kr.losses.mean_squared_error(returns, values)
+    def _value_loss(self, ret_val, values):
+        returns, old_values = [tf.squeeze(v) for v in tf.split(ret_val, 2, axis=-1)]
+        loss1 = tf.square(values - returns)
+        v_clipped = old_values + tf.clip_by_value(values - old_values, -self.vf_clip_param, self.vf_clip_param)
+        loss2 = tf.square(v_clipped - returns)
+        loss = tf.maximum(loss1, loss2)
+        mean_loss = tf.reduce_mean(loss)
+        return mean_loss
 
     def _surrogate_loss(self, acts_advs_logs, logits):
         # a trick to input actions and advantages through same API

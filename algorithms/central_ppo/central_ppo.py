@@ -47,7 +47,7 @@ class CentralPPOTrainer:
     def __init__(self, env_creator, ac_creator, population_size, update_target_freq=30, seed=0, n_workers=1,
                  sample_batch_size=500, batch_size=250, gamma=1., lamb=0.95, clip_ratio=0.2, pi_lr=3e-4, value_lr=1e-3,
                  train_pi_iters=80, train_v_iters=80, target_kl=0.01, save_freq=10, normalise_advantages=False,
-                 normalise_observation=False, entropy_coeff=0.01, n_trainers=1):
+                 normalise_observation=False, entropy_coeff=0.01, n_trainers=1, uniform_sample=True, vf_clip_param=10):
         np.random.seed(seed)
         tf.random.set_seed(seed)
 
@@ -57,6 +57,7 @@ class CentralPPOTrainer:
         self.batch_size = batch_size
         self.save_freq = save_freq
         self.population_size = population_size
+        self.uniform_sample = uniform_sample
 
         self.algorithm_folder = os.path.dirname(os.path.abspath(__file__))
         self.filter_manager = FilterManager()
@@ -79,7 +80,8 @@ class CentralPPOTrainer:
         else:
             trainer = ray.remote(Trainer)
         self.trainers = [trainer.remote(ac_creator, batch_size, normalise_advantages, train_pi_iters, train_v_iters,
-                                        value_lr, pi_lr, env_creator, target_kl, clip_ratio, entropy_coeff)
+                                        value_lr, pi_lr, env_creator, target_kl, clip_ratio, entropy_coeff,
+                                        vf_clip_param)
                          for _ in range(n_trainers)]
 
         self.steps_per_worker = sample_batch_size // n_workers
@@ -87,7 +89,8 @@ class CentralPPOTrainer:
             sample_batch_size = n_workers * self.steps_per_worker
             print('WARNING: the sample_batch_size was changed to: %d' % sample_batch_size)
         self.samplers = [Sampler.remote(self.steps_per_worker, gamma, lamb, env_creator, ac_creator, i,
-                                        population_size, normalise_observation) for i in range(n_workers)]
+                                        population_size, normalise_observation, uniform_sample)
+                         for i in range(n_workers)]
 
     def set_family_reward_coeffs(self, epoch):
         coeff_dict = {}
@@ -132,7 +135,7 @@ class CentralPPOTrainer:
                 samples_this_iter = 0
                 i = 0
                 for species_index, variables in species_buffers.items():
-                    obs, act, adv, ret, log_probs, state_action = variables
+                    obs, act, adv, ret, log_probs, state_action, val = variables
                     if len(obs) < self.batch_size:
                         continue
                     samples_this_iter += len(obs)
@@ -216,7 +219,7 @@ class CentralPPOTrainer:
         episodes, training_samples = 0, 0
 
         if generation == 0:
-            species_sampler = SpeciesSampler(self.population_size, bias=1)
+            species_sampler = SpeciesSampler(self.population_size, bias=1, uniform_sample=self.uniform_sample)
             weights = []
             for _ in range(self.population_size):
                 ac = self.ac_creator()
@@ -227,7 +230,7 @@ class CentralPPOTrainer:
                 checkpoint_path = os.path.join(species_folder, str(episodes))
                 self.ac.save_weights(checkpoint_path)
         else:
-            species_sampler = SpeciesSampler(self.population_size, bias=35)
+            species_sampler = SpeciesSampler(self.population_size, bias=35, uniform_sample=self.uniform_sample)
             last_generation = generation - 1
             weights, self.filters, old_species_sampler, episodes, training_samples = load_generation(self.ac, self.env,
                                                                                                      last_generation,
@@ -268,7 +271,8 @@ class CentralPPOTrainer:
             ret_buf = np.empty(size, dtype=np.float32)
             log_probs_buf = np.empty(size, dtype=np.float32)
             state_action_buf = np.empty((size,) + tuple(obs_shape), dtype=np.float32)
-            buffers[species_index] = [obs_buf, act_buf, adv_buf, ret_buf, log_probs_buf, state_action_buf]
+            val_buf = np.empty(size, dtype=np.float32)
+            buffers[species_index] = [obs_buf, act_buf, adv_buf, ret_buf, log_probs_buf, state_action_buf, val_buf]
         return buffers
 
     def _concatenate_samplers_results(self, species_dict_list, ext_species_buffers):

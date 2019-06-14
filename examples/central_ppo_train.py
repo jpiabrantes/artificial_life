@@ -9,7 +9,7 @@ from algorithms.central_ppo.central_ppo import CentralPPOTrainer
 
 # training session
 generation = 0
-epochs = 5000
+epochs = 10000
 save_freq = 30
 load = False
 
@@ -28,6 +28,8 @@ batch_size = 250
 entropy_coeff = 0.01
 population_size = 9
 update_target_freq = 1
+uniform_sample = True
+vf_clip_param = 50
 
 # parallelism
 n_trainers = 4
@@ -60,5 +62,5 @@ trainer = CentralPPOTrainer(env_creator, ac_creator, population_size, seed=seed,
                             n_workers=n_workers, batch_size=batch_size, normalise_observation=True,
                             sample_batch_size=sample_batch_size, entropy_coeff=entropy_coeff,
                             normalise_advantages=True, update_target_freq=update_target_freq, save_freq=save_freq,
-                            n_trainers=n_trainers)
+                            n_trainers=n_trainers, vf_clip_param=vf_clip_param, uniform_sample=uniform_sample)
 trainer.train(epochs, generation, load=load)

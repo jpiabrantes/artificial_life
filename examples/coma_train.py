@@ -30,7 +30,7 @@ batch_size = 25
 entropy_coeff = 0.08
 population_size = 10
 update_target_freq = 1
-vf_clip_param = 10
+vf_clip_param = 50
 
 # parallelism
 n_trainers = 1

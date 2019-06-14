@@ -125,9 +125,10 @@ class SpeciesRunningStat:
 
 
 class SpeciesSampler:
-    def __init__(self, population_size, bias=1):
+    def __init__(self, population_size, bias=1, uniform_sample=False):
         self.rs = SpeciesRunningStat(population_size)
         self.buffer = SpeciesRunningStat(population_size, initial_bias=bias)
+        self.uniform_sample = uniform_sample
         self._last_sample = None
 
     def show_results(self, species_indices, values):
@@ -142,7 +143,7 @@ class SpeciesSampler:
 
     def sample(self, size):
         assert self._last_sample is None, 'Show results before sampling again'
-        if np.any(self.rs.n == 0):  # if there is a species that hasn't been sampled yet, assume uniform distribution.
+        if self.uniform_sample or np.any(self.rs.n == 0):  # if there is a species that hasn't been sampled yet, assume uniform distribution.
             prob = np.ones(self.rs.population_size)/self.rs.population_size
         else:
             population = np.maximum([np.random.normal(mu, std) for mu, std in zip(self.rs.mean, self.rs.std)],
