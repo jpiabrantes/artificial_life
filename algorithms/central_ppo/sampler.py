@@ -106,12 +106,15 @@ class Sampler:
                         zip(*[info[f] for f in ('agents', 'obs', 'actions', 'vals', 'log_probs', 'states_actions',
                                                 'locs')]):
                     if agent_name in done_dict:
+                        species_index = agent_name_to_species_index_fn(agent_name)
                         buf, rew = agent_buffers[agent_name], reward_dict[agent_name]
+                        if species_index > 2:
+                            rew = np.log(rew+1)
                         ep_ret += rew
                         buf.store(obs, action, rew, val, log_prob, state_action)
                         if done_dict[agent_name]:  # if entity died
                             kinship_map = self.env.get_kinship_map(agent_name)
-                            if agent_name_to_species_index_fn(agent_name) > 5 and np.any(kinship_map > 0):
+                            if species_index > 5 and np.any(kinship_map > 0):
                                 last_value = 1/np.sum(kinship_map)*(kinship_map*val_map).sum()
                             else:
                                 last_value = 0
