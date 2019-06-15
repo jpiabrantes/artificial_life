@@ -152,7 +152,7 @@ class SpeciesSampler:
                 prob = np.ones(self.rs.population_size) / self.rs.population_size
             else:
                 prob = population / np.sum(population)
-        samples = np.random.choice(range(self.rs.population_size), p=prob, replace=True, size=size)
+        samples = np.random.choice(range(self.rs.population_size), p=prob, replace=False, size=size)
         self._last_sample = samples
         return samples
 

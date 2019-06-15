@@ -112,7 +112,7 @@ class Sampler:
                         buf.store(obs, action, rew, val, log_prob, state_action)
                         if done_dict[agent_name]:  # if entity died
                             kinship_map = self.env.get_kinship_map(agent_name)
-                            if np.any(kinship_map > 0):
+                            if species_index > 5 and np.any(kinship_map > 0):
                                 last_value = 1/np.sum(kinship_map)*(kinship_map*val_map).sum()
                             else:
                                 last_value = 0

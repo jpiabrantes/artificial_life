@@ -32,8 +32,8 @@ uniform_sample = True
 vf_clip_param = 50
 
 # parallelism
-n_trainers = 1
-n_workers = 3
+n_trainers = 4
+n_workers = 6
 assert n_workers <= cpu_count(), 'Number of workers is too high'
 DEBUG = n_workers == 1
 ray.init(local_mode=DEBUG)
