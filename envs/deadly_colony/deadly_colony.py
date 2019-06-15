@@ -8,6 +8,7 @@ from gym.spaces import Box, Discrete
 
 from utils.map import create_tiles_1
 from utils.misc import Enum, MeanTracker, Timer
+from replay.stats import CompetitiveScenarios
 
 State = Enum(('SUGAR', 'AGENTS', 'AGE', 'AGENT_SUGAR', 'HEALTH', 'DNA'))
 Terrain = Enum(('SUGAR', 'AGENTS', 'AGE', 'AGENT_SUGAR', 'HEALTH', 'KINSHIP'))
@@ -28,6 +29,8 @@ class DeadlyColony:
 
         # env parameters
         self.update_stats = config['update_stats']
+        if self.update_stats:
+            self.competitive_scenario = CompetitiveScenarios()
         self.n_rows = config['n_rows']
         self.n_cols = config['n_cols']
         self.sugar_growth_rate = config['sugar_growth_rate']
@@ -277,7 +280,6 @@ class DeadlyColony:
         else:
             super(DeadlyColony, self).render(mode)
 
-
     def get_kinship_map(self, agent_name):
         """
         Returns a kinship 2D map in respect to the requested agent.
@@ -397,6 +399,18 @@ class Tile:
                 return tile
         return None
 
+    def find_best_tile(self):
+        max_ = 0
+        best_loc = None
+        for tile in self.neighbours:
+            sugar = tile._state_at_tile[State.SUGAR]
+            if sugar > max_:
+                max_ = sugar
+                best_loc = (tile.row, tile.col)
+            elif sugar == max_:
+                best_loc = None
+        return best_loc
+
     def find_random_neighbour(self):
         neighbours = []
         for tile in self.neighbours:
@@ -429,6 +443,7 @@ class Agent:
     def __init__(self, row, col, endowment, metabolism, fertility_age, infertility_age, longevity, tile,
                  bring_agent_to_world_fn, species_index, attack_metrics, dna=None):
         self.alive = True
+
         self.attack_metrics = attack_metrics
         self.dna = Agent.id if dna is None else dna
         self.species_index = 0 if species_index is None else species_index
@@ -444,7 +459,7 @@ class Agent:
         self.longevity = longevity
         self.fertility_age = fertility_age
         self.infertility_age = infertility_age
-        self.health = 6
+        self.health = 2
 
         self.age = 0
         bring_agent_to_world_fn(self)
@@ -468,7 +483,7 @@ class Agent:
         self.cannibal_victim = False
 
     def to_dict(self):
-        to_delete = {'bring_agent_to_world_fn', 'tile'}
+        to_delete = {'bring_agent_to_world_fn', 'tile', 'competitive_scenario'}
         to_store = set(self.__dict__.keys()).difference(to_delete)
         return {k: deepcopy(self.__dict__[k]) for k in to_store}
 
@@ -496,9 +511,9 @@ class Agent:
         if self.alive and attack:
             enemy = self.tile.find_random_neighbour()
             if enemy is not None:
-                enemy.health -= 2
+                enemy.health -= 1
                 if enemy.health <= 0:
-                    loot = enemy.sugar * 0.8
+                    loot = enemy.sugar * 0.5
                     enemy.die()
                     victim = enemy
                 else:

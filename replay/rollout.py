@@ -47,6 +47,15 @@ def rollout(env, exp_name, policies, species_indices, obs_filter):
             species_info[species_index]['agents'].append(agent_name)
             species_info[species_index]['obs'].append(obs_filter(raw_obs))
 
+        # competitive stats
+        agent_names = list(raw_obs_dict.keys())
+        np.random.shuffle(agent_names)
+        for agent_name in agent_names:
+            agent = env.agents[agent_name]
+            location = agent.tile.find_best_tile()
+            if location is not None:
+                env.competitive_scenario.add_best_tile(agent.to_dict(), location)
+
         # compute actions for each agent
         action_dict = {}
         for species_index, info in species_info.items():
@@ -55,6 +64,9 @@ def rollout(env, exp_name, policies, species_indices, obs_filter):
             for agent_name, action_probs, action in zip(info['agents'], probs, actions):
                 action_dict[agent_name] = action
                 episode_dict['agents'][agent_name]['action_probs'] = action_probs
+
+        # competitive stats
+        env.competitive_scenario.add_rows(action_dict)
 
         population_integral += len(env.agents)
         # step
@@ -67,4 +79,5 @@ def rollout(env, exp_name, policies, species_indices, obs_filter):
 
     with open(os.path.join('./dicts', '%s.pkl' % exp_name), 'wb') as f:
         pickle.dump(dicts, f)
+    env.competitive_scenario.save()
     return ep_len, population_integral
