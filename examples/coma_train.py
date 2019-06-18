@@ -40,6 +40,7 @@ DEBUG = n_workers == 1
 ray.init(local_mode=DEBUG)
 
 # actor critic
+# TODO: make the actor a dense network
 actor_args = {'conv_sizes': [(32, (3, 3), 1), (32, (3, 3), 1)],
               'obs_input_shape': env.observation_space.shape,
               'fc_sizes': [16],

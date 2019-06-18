@@ -22,7 +22,7 @@ class DeadlyColony:
     reward_range = (0.0, float('inf'))
 
     def __init__(self, config):
-        self.family_reward_coeff = lambda agent_name: 0
+        self.family_reward_coeff = lambda agent_name: 1
 
         self.State = State
         self.Terrain = Terrain
@@ -131,7 +131,7 @@ class DeadlyColony:
         - Mate, collect and eat
         - Agents (including children) observe
         """
-        done_dict, reward_dict, info_dict = {}, {}, {}
+        done_dict, individual_reward, info_dict = {}, {}, {}
         if self.update_stats:
             for agent_name, action in action_dict.items():
                 self.agents[agent_name].falsify_stats()
@@ -151,10 +151,10 @@ class DeadlyColony:
                 self.agent_dna[agent_name] = agent.dna
                 newborn, harvest, died = agent.step(movement, self.n_rows, self.n_cols, self.tiles)
                 if self.greedy_reward:
-                    reward_dict[agent_name] = harvest
+                    individual_reward[agent_name] = harvest
                     family_reward[agent.dna] += harvest
                 else:
-                    reward_dict[agent_name] = 1
+                    individual_reward[agent_name] = 1
                     family_reward[agent.dna] += 1
                 if newborn:
                     self.babies_born += 1
@@ -171,7 +171,7 @@ class DeadlyColony:
                     attack = action // 5
                     victim, loot = agent.attack(attack)
                     if loot and self.greedy_reward:
-                        reward_dict[agent_name] += loot
+                        individual_reward[agent_name] += loot
                         family_reward[self.agent_dna[agent_name]] += loot
                     if victim:
                         self.life_expectancy.add_value(victim.age)
@@ -199,9 +199,11 @@ class DeadlyColony:
             dna_results[int(dna) - 1] = count
             self.dna_total_score[int(dna) - 1] += count
 
-        # add in the family reward
+        # compute the reward
+        reward_dict = {}
         for agent_name, dna in self.agent_dna.items():
-            reward_dict[agent_name] += family_reward[dna]*self.family_reward_coeff(agent_name)
+            coeff = self.family_reward_coeff(agent_name)
+            reward_dict[agent_name] = family_reward[dna]*coeff + (1 - coeff)*individual_reward[agent_name]
 
         # Check termination
         self.iter += 1

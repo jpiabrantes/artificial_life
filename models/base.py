@@ -99,6 +99,69 @@ class PPOActorCritic(kr.Model):
         return actions, np.squeeze(value, axis=-1), log_probs
 
 
+# class DenseQNetwork:
+#     def __init__(self, hidden_units, observation_space, action_space):
+#         self.action_space = action_space
+#         input_layer = kl.Input(shape=observation_space.shape)
+#         dense = MLP(hidden_units, 0, observation_space.shape)(input_layer)
+#         stream_adv, stream_val = tf.split(dense, 2, axis=1)
+#         advantage = kl.Dense(action_space.n, activation=None, use_bias=None)(stream_adv)
+#         advantage = tf.subtract(advantage, tf.reduce_mean(advantage, axis=1, keepdims=True))
+#         value = kl.Dense(1, activation=None, use_bias=None)(stream_val)
+#         Qout = value + advantage
+#         self.model = kr.Model(inputs=input_layer, outputs=[Qout])
+#
+#     def get_actions(self, obs, eps):
+#         batch_size = len(obs)
+#         actions = np.zeros((batch_size,), np.int32)
+#         random_mask = np.random.rand(batch_size) < eps
+#         actions[random_mask] = np.random.randint(0, self.action_space.n, size=sum(random_mask))
+#         non_random_mask = np.logical_not(random_mask)
+#         actions[non_random_mask] = tf.argmax(self.model(obs[non_random_mask]), axis=1)
+#         return actions
+#
+#     def update_towards_network(self, qnet, tau):
+#         for my_var, my_weight, weight in zip(self.model.variables, self.model.get_weights(), qnet.model.get_weights()):
+#             my_var.load(weight * (1-tau) + my_weight * tau)
+
+
+class VDNMixer(kr.Model):
+    def __init__(self, hidden_units, observation_space, action_space):
+        super().__init__('VDNMixer')
+        self.action_space = action_space
+        input_layer = kl.Input(shape=observation_space.shape)
+        dense = MLP(hidden_units, 0, observation_space.shape)(input_layer)
+        stream_adv, stream_val = tf.split(dense, 2, axis=1)
+        advantage = kl.Dense(action_space.n, activation=None, use_bias=None)(stream_adv)
+        advantage = tf.subtract(advantage, tf.reduce_mean(advantage, axis=1, keepdims=True))
+        value = kl.Dense(1, activation=None, use_bias=None)(stream_val)
+        Qout = value + advantage
+        self.q = kr.Model(inputs=input_layer, outputs=[Qout])
+
+    def __call__(self, list_of_obs, list_of_act, training=True):
+        """
+
+        :param list_of_obs_act: list of n arrays with dimensions [None, obs_dim+1]
+        :param training: (bool)
+        :return: n
+        """
+        result = []
+        for obs, act in zip(list_of_obs, list_of_act):
+            # n_agents, obs_shape
+            qout = self.q(obs)
+            result.append(tf.reduce_sum(tf.one_hot(tf.cast(act, tf.int32), self.action_space.n)*qout))
+        return tf.stack(result)
+
+    def get_actions(self, obs, eps):
+        batch_size = len(obs)
+        actions = np.zeros((batch_size,), np.int32)
+        random_mask = np.random.rand(batch_size) < eps
+        actions[random_mask] = np.random.randint(0, self.action_space.n, size=sum(random_mask))
+        non_random_mask = np.logical_not(random_mask)
+        actions[non_random_mask] = tf.argmax(self.q(obs[non_random_mask]), axis=1)
+        return actions
+
+
 def create_vision_and_fc_network(obs_input_shape, conv_sizes, fc_sizes, last_fc_sizes, num_outputs, conv_input_shape,
                                  fc_input_length, actor=True):
     input_layer = kl.Input(shape=obs_input_shape)

@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, deque
 
 import numpy as np
 
@@ -17,6 +17,25 @@ class EpStats:
         result = self._stats
         self._stats = defaultdict(list)
         return result
+
+
+class ReplayBuffer:
+    def __init__(self, buffer_size=50000):
+        self.buffer = deque(maxlen=buffer_size)
+        self.buffer_size = buffer_size
+        self.types = (np.float32, np.int32, np.float32, np.float32, np.bool, np.int32)
+
+    def add(self, experience):
+        if type(experience) is deque:
+            for entry in experience:
+                self.buffer.append(entry)
+        else:
+            self.buffer.append(experience)
+
+    def sample(self, size):
+        idx = np.random.choice(range(len(self.buffer)), size=size, replace=False)
+        result = np.array(self.buffer)[idx]
+        return [np.array(result[:, i].tolist(), type_) for i, type_ in enumerate(self.types)]
 
 
 class COMABuffer:
