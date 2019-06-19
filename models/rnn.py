@@ -1,13 +1,8 @@
 import tensorflow as tf
 import tensorflow.keras as kr
 import tensorflow.keras.layers as kl
+
 import numpy as np
-
-from models.base import MLP
-
-
-def td_loss(targets, qtot):
-    return tf.keras.losses.mean_squared_error(targets, qtot)
 
 
 class LSTM_Q(kr.Model):
@@ -45,17 +40,13 @@ class LSTM_Q(kr.Model):
 
 
 class VDNMixer(kr.Model):
-    def __init__(self, hidden_units, observation_shape, action_dim):
+    def __init__(self, hidden_units, lstm_units, observation_shape, action_dim):
         super().__init__('VDNMixer')
+        self.lstm_units = lstm_units
         self.action_dim = action_dim
-        self.q = LSTM_Q(hidden_units, 6, observation_shape, action_dim)
+        self.q = LSTM_Q(hidden_units, lstm_units, observation_shape, action_dim)
 
     def __call__(self, list_of_obs, list_of_act, list_of_states=None, training=True):
-        """
-        :param list_of_obs_act: list of n arrays with dimensions [None, obs_dim+1]
-        :param training: (bool)
-        :return: n
-        """
         if list_of_states is None:
             list_of_states = [None]*len(list_of_obs)
         result = []
@@ -66,23 +57,12 @@ class VDNMixer(kr.Model):
                                                       axis=-1), axis=0))
         return tf.stack(result)
 
-
-# model params
-observation_shape = (100, )
-action_dim = 5
-hidden_sizes = [512, 256, 128]
-q_kwargs = {'hidden_units': hidden_sizes,
-            'observation_shape': observation_shape,
-            'action_dim': action_dim}
-net = VDNMixer(**q_kwargs)
-
-# create dummy data
-batch_size = 10
-agents = np.random.randint(0, 8, size=batch_size)
-list_of_obs = [np.random.rand(a, 2, observation_shape[0]).astype(np.float32) for a in agents]
-list_of_act = [np.random.randint(0, action_dim, size=(a, 2)) for a in agents]
-t_targets = np.random.rand(batch_size)
-
-#print(net(list_of_obs, list_of_act, ))
-out, states = net.q(list_of_obs[1], states=np.random.rand(list_of_obs[1].shape[0], 6).astype(np.float32))
-
+    def get_actions(self, obs, cell_states, eps):
+        batch_size = len(obs)
+        actions = np.empty((batch_size,), np.int32)
+        random_mask = np.random.rand(batch_size) < eps
+        actions[random_mask] = np.random.randint(0, self.action_space.n, size=sum(random_mask))
+        non_random_mask = np.logical_not(random_mask)
+        qout, cell_states[non_random_mask] = self.q(obs[non_random_mask], cell_states[non_random_mask])
+        actions[non_random_mask] = tf.argmax(qout, axis=1)
+        return actions, cell_states, non_random_mask

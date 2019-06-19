@@ -67,7 +67,7 @@ elif exp_name == 'MultiPPO':
 elif exp_name == 'COMA':
     ac = ac_creator()
     weights, filters, species_sampler, episodes, training_samples = load_generation(ac_creator(), env, 0, 10)
-    species_indices = species_sampler.sample(5).tolist()
+    species_indices = species_sampler.sample_steps(5).tolist()
     policies = {i: policy_creator() for i in species_indices}
     for species_index, policy in policies.items():
         policy.set_weights(weights[species_index].actor)
@@ -77,7 +77,7 @@ elif exp_name == 'COMA':
 elif exp_name == 'CENTRAL_PPO':
     ac = ac_creator()
     weights, filters, species_sampler, episodes, training_samples = central_load_generation(ac_creator(), env, 0, 9)
-    species_indices = species_sampler.sample(5).tolist()
+    species_indices = species_sampler.sample_steps(5).tolist()
     policies = {i: policy_creator() for i in species_indices}
     for species_index, policy in policies.items():
         policy.set_weights(weights[species_index].actor)

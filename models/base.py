@@ -140,7 +140,6 @@ class VDNMixer(kr.Model):
 
     def __call__(self, list_of_obs, list_of_act, training=True):
         """
-
         :param list_of_obs_act: list of n arrays with dimensions [None, obs_dim+1]
         :param training: (bool)
         :return: n

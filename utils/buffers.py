@@ -19,23 +19,41 @@ class EpStats:
         return result
 
 
-class ReplayBuffer:
-    def __init__(self, buffer_size=50000):
+class RNNReplayBuffer:
+    def __init__(self, buffer_size=1000):
         self.buffer = deque(maxlen=buffer_size)
-        self.buffer_size = buffer_size
-        self.types = (np.float32, np.int32, np.float32, np.float32, np.bool, np.int32)
 
     def add(self, experience):
-        if type(experience) is deque:
-            for entry in experience:
-                self.buffer.append(entry)
-        else:
-            self.buffer.append(experience)
+        self.buffer.append(experience)
 
-    def sample(self, size):
-        idx = np.random.choice(range(len(self.buffer)), size=size, replace=False)
-        result = np.array(self.buffer)[idx]
-        return [np.array(result[:, i].tolist(), type_) for i, type_ in enumerate(self.types)]
+    def sample(self, batch_size, trace_length):
+        sampled_episodes = np.random.choice(range(len(self.buffer)), batch_size, replace=False)
+        sampled_traces = []
+        for episode in sampled_episodes:
+            point = np.random.randint(0, len(episode) + 1 - trace_length)
+            sampled_traces.append(episode[point:point + trace_length])
+        sampled_traces = np.array(sampled_traces)
+        return np.reshape(sampled_traces, [batch_size * trace_length, 5])
+
+
+class ReplayBuffer:
+    def __init__(self, buffer_size=10000):
+        self.buffer = deque(maxlen=buffer_size)
+
+    def add_step(self, step):
+        """
+        :param step: list with size #agents with experiences [(s, a, r, s', d), ...]
+        :return:
+        """
+        self.buffer.append(step)
+
+    def add_buffer(self, buffer):
+        for step in buffer:
+            self.buffer.append(step)
+
+    def sample_steps(self, size):
+        step_idx = np.random.choice(range(len(self.buffer)), size=size, replace=False)
+        return [self.buffer[i] for i in step_idx]
 
 
 class COMABuffer:

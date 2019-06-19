@@ -23,6 +23,7 @@ class DQN_trainer:
         env = env_creator()
         self.env = env
 
+        trace_length = 8
         exp_name = 'basic'
         algorithm_folder = os.path.dirname(os.path.abspath(__file__))
         exp_folder = os.path.join(algorithm_folder, 'checkpoints', env.name, exp_name)
@@ -52,9 +53,10 @@ class DQN_trainer:
         training_losses = []
         total_steps = 0
         while True:
-            episode_buffers = {species_index: ReplayBuffer() for species_index in species_indices}
+            episode_buffers = {species_index: [] for species_index in species_indices}
             # Reset environment and get first new observation
             raw_obs_dict, done_dict = env.reset(), {'__all__': False}
+            agent_states = defaultdict(lambda: np.zeros((1, main_qn.lstm_units), np.float32))
 
             episodes += 1
             ep_len = 0
@@ -65,9 +67,11 @@ class DQN_trainer:
                 species_info = defaultdict(lambda: {'obs': [], 'agents': []})
                 for agent_name, raw_obs in raw_obs_dict.items():
                     species_index = agent_name_to_species_index_fn(agent_name)
-                    species_info[species_index]['agents'].append(agent_name)
+                    info = species_info[species_index]
+                    info['agents'].append(agent_name)
                     filter_ = self.filters['ActorObsFilter']
-                    species_info[species_index]['obs'].append(filter_(raw_obs, self.filters))
+                    info['obs'].append(filter_(raw_obs, self.filters))
+                    info['cell_states'].append(agent_states[agent_name])
 
                 # compute actions of each species
                 action_dict = {}
@@ -75,18 +79,21 @@ class DQN_trainer:
                     main_qn.set_weights(self.weights[species_index].main)
                     eps = species_dict[species_index]['eps']
                     observation_arr = np.stack(info['obs'])
-                    actions = main_qn.get_actions(observation_arr, eps)
+                    states_arr = np.stack(info['cell_states'])
+                    actions, cell_states = main_qn.get_actions(observation_arr, states_arr, eps)
                     info['actions'] = actions
-                    for agent_name, action in zip(info['agents'], actions):
+                    for agent_name, action, cell_state in zip(info['agents'], actions, cell_states):
                         action_dict[agent_name] = action
+                        agent_states[agent_name] = cell_state
 
                 # step
                 n_raw_obs_dict, reward_dict, done_dict, info_dict = env.step(action_dict)
                 total_steps += 1
 
                 # Save the experience in each species episode buffer
-                step_buffer = defaultdict(list)
                 for species_index, info in species_info.items():
+                    buffer = episode_buffers[species_index]
+                    species_dict[species_index]['steps'] += len(info['agents'])
                     for agent_name, obs, action in zip(info['agents'], info['obs'], info['actions']):
                         rew, done = reward_dict[agent_name], done_dict[agent_name]
                         n_obs = n_raw_obs_dict.get(agent_name, None)
@@ -94,9 +101,7 @@ class DQN_trainer:
                             n_obs = self.filters['ActorObsFilter'](n_obs, update=False)
                         else:
                             n_obs = obs*np.nan
-                        step_buffer[species_index].append((obs, action, rew, n_obs, done))
-                    species_dict[species_index]['steps'] += len(info['agents'])
-                    species_dict[species_index]['buffer'].add_step(step_buffer[species_index])
+                        buffer.append((obs, action, rew, n_obs, done, species_dict[species_index]['steps']))
 
                 raw_obs_dict = n_raw_obs_dict
                 total_rew += sum(reward_dict.values())
@@ -113,39 +118,34 @@ class DQN_trainer:
                             dict_['eps'] = max(coeff*end_eps+(1-coeff)*start_eps, end_eps)
 
                         if dict_['steps'] - dict_['last_update'] >= update_freq:
-                            '''
-                            obs: batch_size, #agents, dim
-                            steps: list of size batch_size with a list of size n_agents with experiences
-                            '''
-
                             dict_['last_update'] = dict_['steps']
-
-                            steps = dict_['buffer'].sample_steps(batch_size)  # Get a random batch of experiences.
+                            #  obs: batch_size, #agents, obs_dim
+                            obs, actions, rew, n_obs, done, steps = dict_['buffer'].sample_steps(batch_size, trace_length)  # Get a random batch of experiences.
+                            # (batch_size, #agents, trace_length, dim) -> (batch_size*trace_length, dim)
+                            actions, rew, done, steps = [np.reshape(x, (batch_size*trace_length, -1))
+                                                         for x in (actions, rew, done, steps)]
 
                             main_qn.set_weights(self.weights[species_index].main)
                             target_qn.set_weights(self.weights[species_index].target)
 
                             # Below we perform the Double-DQN update to the target Q-values
-                            list_of_obs = [None]*len(steps)
-                            list_of_act = [None]*len(steps)
-                            target_q = np.zeros((len(steps),), np.float32)
-                            for i, step in enumerate(steps):
-                                # step: list of experiences of size #n_agents
-                                step = np.stack(step)
-                                obs, act, rew, n_obs, done = [np.array(x.tolist(), t)
-                                                              for x, t in zip(step.T,
-                                                                              (np.float32, np.int32, np.float32,
-                                                                               np.float32, np.bool))]
-                                list_of_obs[i] = obs
-                                list_of_act[i] = act
-                                assert len(np.unique(rew)) == 1
+                            list_of_obs = []
+                            list_of_act = []
+                            unique_steps = np.unique(steps)
+                            target_q = np.zeros((len(unique_steps),), np.float32)
+                            for i, step in enumerate(unique_steps):
+                                mask = step == steps
+                                s_rew, s_done, s_obs, s_act = rew[mask], done[mask], obs[mask], actions[mask]
+                                list_of_obs.append(s_obs)
+                                list_of_act.append(s_act)
+                                assert len(np.unique(s_rew)) == 1
 
-                                target_q[i] = rew[0]
-                                alive_mask = np.logical_not(done)
+                                target_q[i] = s_rew[0]
+                                alive_mask = np.logical_not(s_done)
                                 if np.any(alive_mask):
                                     # compute Qtot for alive agents
-                                    n_actions = main_qn.get_actions(n_obs[alive_mask], 0)
-                                    q_out = target_qn.q.predict(n_obs[alive_mask])
+                                    n_actions = main_qn.get_actions(s_obs[alive_mask], 0)
+                                    q_out = target_qn.q.predict(s_obs[alive_mask])
                                     double_q = q_out[range(len(n_actions)), n_actions]
                                     target_q[i] += gamma * np.sum(double_q)
 
@@ -162,7 +162,7 @@ class DQN_trainer:
                                 target_w.append(tau * mw + (1-tau)*tw)
                             self.weights[species_index] = Weights(main_qn.get_weights(), target_w)
             for species_index, buffer in episode_buffers.items():
-                species_dict[species_index]['buffer'].add_buffer(buffer.buffer)
+                species_dict[species_index]['buffer'].add_step(buffer)
 
             training_loss = 0 if not len(training_losses) else np.mean(training_losses)
             training_losses = []

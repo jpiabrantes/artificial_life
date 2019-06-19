@@ -275,7 +275,7 @@ class MultiAgentCOMATrainer:
             species_indices[0] = results[-1][0]
             species_indices[1] = results[-1][0]
             species_indices[2] = results[-2][0]
-            species_indices[3:] = old_species_sampler.sample(self.population_size-3)
+            species_indices[3:] = old_species_sampler.sample_steps(self.population_size - 3)
             new_weights = [None]*self.population_size
             for new_species_index, species_index in enumerate(species_indices):
                 species_folder = os.path.join(generation_folder, str(new_species_index))
