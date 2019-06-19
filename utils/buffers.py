@@ -36,8 +36,8 @@ class RNNReplayBuffer:
         return np.reshape(sampled_traces, [batch_size * trace_length, 5])
 
 
-class ReplayBuffer:
-    def __init__(self, buffer_size=10000):
+class VDNReplayBuffer:
+    def __init__(self, buffer_size=20000):
         self.buffer = deque(maxlen=buffer_size)
 
     def add_step(self, step):
@@ -54,6 +54,29 @@ class ReplayBuffer:
     def sample_steps(self, size):
         step_idx = np.random.choice(range(len(self.buffer)), size=size, replace=False)
         return [self.buffer[i] for i in step_idx]
+
+
+class QTranReplayBuffer:
+    def __init__(self, buffer_size=20000):
+        self.step_buffer = deque(maxlen=buffer_size)
+        self.global_buffer = deque(maxlen=buffer_size)
+
+    def add_step(self, step, state_action_species):
+        """
+        :param step: list with size #agents with experiences [(s, a, r, s', d), ...]
+        :return:
+        """
+        self.step_buffer.append(step)
+        self.global_buffer.append(state_action_species)
+
+    def add_buffer(self, buffer):
+        for step, state_action_species in zip(buffer.step_buffer, buffer.global_buffer):
+            self.step_buffer.append(step)
+            self.global_buffer.append(state_action_species)
+
+    def sample_steps(self, size):
+        step_idx = np.random.choice(range(len(self.step_buffer)), size=size, replace=False)
+        return zip(*[(self.step_buffer[i], self.global_buffer[i]) for i in step_idx])
 
 
 class COMABuffer:

@@ -5,7 +5,7 @@ from collections import defaultdict
 import pandas as pd
 import numpy as np
 
-from utils.misc import agent_name_to_policy_index
+from utils.misc import agent_name_to_species_index_fn
 
 this_folder = os.path.dirname(os.path.abspath(__file__))
 columns = ['age', 'health', 'sugar', 'family_size', 'attacked', 'kill', 'victim', 'cannibal_attack', 'cannibal_kill',
@@ -43,7 +43,7 @@ def rollout(env, exp_name, policies, species_indices, obs_filter):
         # collect observations for each policy
         species_info = defaultdict(lambda: {'obs': [], 'agents': []})
         for agent_name, raw_obs in raw_obs_dict.items():
-            species_index = agent_name_to_policy_index(agent_name)
+            species_index = agent_name_to_species_index_fn(agent_name)
             species_info[species_index]['agents'].append(agent_name)
             species_info[species_index]['obs'].append(obs_filter(raw_obs))
 

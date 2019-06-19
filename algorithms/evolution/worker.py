@@ -5,7 +5,7 @@ import tensorflow as tf
 import numpy as np
 
 from utils.filters import MeanStdFilter, apply_filters
-from utils.misc import agent_name_to_policy_index
+from utils.misc import agent_name_to_species_index_fn
 from pdb import set_trace as pdb
 
 
@@ -37,7 +37,7 @@ class Worker:
                 # collect observations for each policy
                 policy_info = defaultdict(lambda: {'obs': [], 'agents': []})
                 for agent_name, raw_obs in raw_obs_dict.items():
-                    policy_index = pop_indices.index(agent_name_to_policy_index(agent_name))
+                    policy_index = pop_indices.index(agent_name_to_species_index_fn(agent_name))
                     policy_info[policy_index]['agents'].append(agent_name)
                     policy_info[policy_index]['obs'].append(apply_filters(raw_obs, self.filters))
 

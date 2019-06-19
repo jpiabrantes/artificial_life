@@ -9,7 +9,7 @@ import scipy.signal
 Weights = namedtuple('Weights', ('actor', 'critic'))
 
 
-def agent_name_to_policy_index(agent_name):
+def agent_name_to_species_index_fn(agent_name):
     return int(agent_name.split('_')[0])
 
 
