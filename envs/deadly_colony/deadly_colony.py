@@ -62,6 +62,7 @@ class DeadlyColony:
         self.agents = None
         self.tiles = None
         self.iter = None
+        self.agent_id = None
 
         # Tracking metrics
         self.timers = {'move': MeanTracker(), 'mate_collect_eat': MeanTracker(), 'observe': MeanTracker()}
@@ -94,7 +95,7 @@ class DeadlyColony:
                 self.attack_metrics[key] = MeanTracker()
         if species_indices is None:
             species_indices = list(range(self.n_agents))
-        Agent.id = 1
+        self.agent_id = 1
         self.babies_born = 0
         self.average_population = MeanTracker()
         self.dna_total_score = [0]*self.n_agents
@@ -304,7 +305,10 @@ class DeadlyColony:
         return result
 
     def add_agent_callback(self, agent):
-        self.agents[agent.id] = agent
+        agent_id = self.agent_id
+        self.agent_id += 1
+        self.agents['{}_{:d}'.format(agent.species_index, agent_id)] = agent
+        return agent_id
 
     def _generate_observations(self):
         for row in range(self.n_rows):
@@ -440,17 +444,15 @@ class Tile:
 
 
 class Agent:
-    id = 1
-
     def __init__(self, row, col, endowment, metabolism, fertility_age, infertility_age, longevity, tile,
                  bring_agent_to_world_fn, species_index, attack_metrics, dna=None):
         self.alive = True
 
         self.attack_metrics = attack_metrics
-        self.dna = Agent.id if dna is None else dna
         self.species_index = 0 if species_index is None else species_index
-        self.id = '{}_{:d}'.format(species_index, Agent.id)
-        Agent.id += 1
+        id_ = bring_agent_to_world_fn(self)
+        self.dna = id_ if dna is None else dna
+        self.id = '{}_{:d}'.format(species_index, id_)
         self.row = row
         self.col = col
         self.endowment = endowment
@@ -464,7 +466,6 @@ class Agent:
         self.health = 2
 
         self.age = 0
-        bring_agent_to_world_fn(self)
         tile.add_agent(self)
 
         # for stats purposes
