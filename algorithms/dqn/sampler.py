@@ -50,6 +50,11 @@ class Sampler:
 
                 # step
                 n_raw_obs_dict, reward_dict, done_dict, info_dict = env.step(action_dict)
+                # make sure we have a reward and a done for every action sent
+                for set_, label in zip((set(reward_dict.keys()), set(done_dict.keys()).difference({'__all__'})),
+                                       ('reward', 'done')):
+                    assert set(action_dict.keys()) == set_, "You should have a {} for each agent that sent an action." \
+                                                            "\n{} vs {}".format(label, set_, action_dict.keys())
 
                 # Save the experience in each species episode buffer
                 step_buffer = defaultdict(list)
