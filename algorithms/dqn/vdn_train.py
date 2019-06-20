@@ -16,7 +16,7 @@ Weights = namedtuple('Weights', ('main', 'target'))
 
 class DQN_trainer:
     def __init__(self, env_creator,  brain_creator, population_size, batch_size=32, update_freq=4, gamma=0.99,
-                 start_eps=1, end_eps=0.1, annealing_steps=50000, num_epochs=5000, pre_train_steps=250, tau=0.001):
+                 start_eps=1, end_eps=0.1, annealing_steps=50000, pre_train_steps=250, tau=0.001):
         env = env_creator()
         self.env = env
 
@@ -98,7 +98,6 @@ class DQN_trainer:
                 raw_obs_dict = n_raw_obs_dict
                 total_rew += sum(reward_dict.values())
                 ep_len += 1
-
                 for species_index in species_info:
                     dict_ = species_dict[species_index]
                     if dict_['steps'] > pre_train_steps:
@@ -136,7 +135,6 @@ class DQN_trainer:
                                 list_of_obs[i] = obs
                                 list_of_act[i] = act
                                 assert len(np.unique(rew)) == 1
-
                                 target_q[i] = rew[0]
                                 alive_mask = np.logical_not(done)
                                 if np.any(alive_mask):
@@ -152,12 +150,16 @@ class DQN_trainer:
                             grads = t.gradient(loss, main_qn.variables)
                             training_losses.append(loss)
                             dict_['optimiser'].apply_gradients(zip(grads, main_qn.variables))
-                            #result = main_qn.train_on_batch(x=list_of_obs, y=target_q)
 
                             target_w = []
                             for mw, tw in zip(main_qn.get_weights(), target_qn.get_weights()):
                                 target_w.append(tau * mw + (1-tau)*tw)
                             self.weights[species_index] = Weights(main_qn.get_weights(), target_w)
+                            species_folder = os.path.join(exp_folder, str(species_index))
+                            main_qn.save_weights(species_folder)
+                            target_qn.save_weights(species_folder)
+
+
             for species_index, buffer in episode_buffers.items():
                 species_dict[species_index]['buffer'].add_buffer(buffer.buffer)
 

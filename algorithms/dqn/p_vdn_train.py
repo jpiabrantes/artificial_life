@@ -52,6 +52,7 @@ class DQN_trainer:
         training_losses = []
         total_steps = 0
         while True:
+            total_steps += 1
             with Timer() as sampling_time:
                 filter_manager.synchronize(self.filters, samplers)
                 weights_id = ray.put({species_index: w.main for species_index, w in self.weights.items()})

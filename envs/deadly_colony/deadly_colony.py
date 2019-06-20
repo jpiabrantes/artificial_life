@@ -539,33 +539,32 @@ class Agent:
         return victim, loot
 
     def step(self, movement, n_rows, n_cols, tiles):
-        if self.alive:
-            assert movement in range(5), "Action needs to be an int between 0 and 4"
-            if movement != 4:  # if agent moving
-                new_row, new_col = self.row, self.col
-                if movement == 0:
-                    new_row += 1
-                elif movement == 1:
-                    new_col += 1
-                elif movement == 2:
-                    new_row -= 1
-                elif movement == 3:
-                    new_col -= 1
-                new_row = new_row % n_rows
-                new_col = new_col % n_cols
-                new_tile = tiles[new_row, new_col]
-                if new_tile.add_agent(self):
-                    self.tile.remove_agent(self)
-                    self.tile = new_tile
-                    self.row, self.col = new_row, new_col
-            harvest = self.tile.harvest(self)
-            self.sugar += harvest - self.metabolism
-            newborn = self._reproduce()
-            if newborn:
-                self.sugar -= self.endowment
-            self.age += 1
-            died = (self.sugar < 0) or (self.age == self.longevity)
-            if died:
-                self.die()
-            return newborn, harvest, died
-        return None, 0, True
+        assert self.alive
+        assert movement in range(5), "Action needs to be an int between 0 and 4"
+        if movement != 4:  # if agent moving
+            new_row, new_col = self.row, self.col
+            if movement == 0:
+                new_row += 1
+            elif movement == 1:
+                new_col += 1
+            elif movement == 2:
+                new_row -= 1
+            elif movement == 3:
+                new_col -= 1
+            new_row = new_row % n_rows
+            new_col = new_col % n_cols
+            new_tile = tiles[new_row, new_col]
+            if new_tile.add_agent(self):
+                self.tile.remove_agent(self)
+                self.tile = new_tile
+                self.row, self.col = new_row, new_col
+        harvest = self.tile.harvest(self)
+        self.sugar += harvest - self.metabolism
+        newborn = self._reproduce()
+        if newborn:
+            self.sugar -= self.endowment
+        self.age += 1
+        died = (self.sugar < 0) or (self.age == self.longevity)
+        if died:
+            self.die()
+        return newborn, harvest, died
