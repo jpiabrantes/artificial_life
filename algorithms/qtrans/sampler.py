@@ -6,17 +6,18 @@ import ray
 from utils.buffers import QTranReplayBuffer, EpStats
 from utils.misc import agent_name_to_species_index_fn
 from utils.filters import MeanStdFilter
+from models.base import Qtran
 
 
 @ray.remote(num_cpus=1)
 class Sampler:
-    def __init__(self, env_creator, num_of_envs, num_of_steps_per_env, qn_creator):
+    def __init__(self, env_creator, num_of_envs, num_of_steps_per_env, brain_kwargs):
         self.num_of_steps_per_env = num_of_steps_per_env
         self.envs = [env_creator() for _ in range(num_of_envs)]
         self.state = [{'raw_obs_dict': env.reset(), 'ep_len': 0, 'ep_rew': 0} for env in self.envs]
         # TODO: check random seed
         self.filters = {'ActorObsFilter': MeanStdFilter(shape=self.envs[0].observation_space.shape)}
-        self.qn = qn_creator()
+        self.qn = Qtran(**brain_kwargs)
         self.ep_stats = EpStats()
 
     def rollout(self, weights, eps_dict):

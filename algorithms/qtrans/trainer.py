@@ -2,12 +2,13 @@ import ray
 import pickle
 import numpy as np
 import tensorflow as tf
+from models.base import Qtran
 
 
 @ray.remote(num_gpus=1)
 class Trainer:
-    def __init__(self, brain_creator, gamma, learning_rate, opt_coeff, nopt_coeff):
-        self.main_qn, self.target_qn = brain_creator(), brain_creator()
+    def __init__(self, brain_kwargs, gamma, learning_rate, opt_coeff, nopt_coeff):
+        self.main_qn, self.target_qn = Qtran(**brain_kwargs), Qtran(**brain_kwargs)
         self.gamma = gamma
         self.opt_coeff = opt_coeff
         self.nopt_coeff = nopt_coeff

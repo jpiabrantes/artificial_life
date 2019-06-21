@@ -11,6 +11,7 @@ from utils.misc import Timer
 from utils.filters import MeanStdFilter, FilterManager
 from algorithms.qtrans.sampler import Sampler
 from algorithms.qtrans.trainer import Trainer
+from models.base import Qtran
 
 
 Networks = namedtuple('Networks', ('main', 'target'))
@@ -18,7 +19,7 @@ Weights = namedtuple('Weights', ('main', 'target'))
 
 
 class QtranTrainer:
-    def __init__(self, env_creator,  brain_creator, population_size, gamma=0.99,
+    def __init__(self, env_creator,  brain_kwargs, population_size, gamma=0.99,
                  start_eps=1, end_eps=0.1, annealing_steps=50000, tau=0.001, n_trainers=4,
                  n_samplers=40, num_envs_per_sampler=10, num_of_steps_per_sample=1, learning_rate=0.0005,
                  opt_coeff=1, nopt_coeff=1):
@@ -33,7 +34,7 @@ class QtranTrainer:
         self.weights = {}
         with tf.device('/cpu:0'):
             for species_index in range(population_size):
-                brain = brain_creator()
+                brain = Qtran(**brain_kwargs)
                 self.weights[species_index] = Weights(brain.get_weights(), brain.Q.get_weights())
                 os.makedirs(os.path.join(exp_folder, str(species_index)), exist_ok=True)
 
@@ -42,9 +43,9 @@ class QtranTrainer:
 
         species_dict = {species_index: {'steps': 0, 'eps': start_eps, 'optimiser_weights': None}
                         for species_index in range(population_size)}
-        samplers = [Sampler.remote(env_creator, num_envs_per_sampler, num_of_steps_per_sample,
-                                   brain_creator) for _ in range(n_samplers)]
-        trainers = [Trainer.remote(brain_creator, gamma, learning_rate, opt_coeff, nopt_coeff)
+        samplers = [Sampler.remote(env_creator, num_envs_per_sampler, num_of_steps_per_sample, brain_kwargs)
+                    for _ in range(n_samplers)]
+        trainers = [Trainer.remote(brain_kwargs, gamma, learning_rate, opt_coeff, nopt_coeff)
                     for _ in range(n_trainers)]
 
         # Set the rate of random action decrease.
@@ -153,7 +154,6 @@ class QtranTrainer:
 
 
 if __name__ == '__main__':
-    from models.base import Qtran
     from envs.deadly_colony.deadly_colony import DeadlyColony
     from envs.deadly_colony.env_config import env_default_config
 
@@ -161,14 +161,15 @@ if __name__ == '__main__':
     config['greedy_reward'] = True
     env_creator = lambda: DeadlyColony(config)
     env = env_creator()
+
     q_kwargs = {'hidden_units': [512, 256, 128], 'observation_space': env.observation_space}
     rows, cols, depth = env.critic_observation_shape
     depth += 1  # will give state-actions
     Q_kwargs = {'conv_sizes': [(32, (6, 6), (3, 3)), (64, (4, 4), (2, 2)), (64, (3, 3), (1, 1))],
                 'fc_sizes': [512],
                 'input_shape': (rows, cols, depth)}
-    V_kwargs = Q_kwargs
-    brain_creator = lambda: Qtran(q_kwargs, Q_kwargs, V_kwargs, action_space=env.action_space)
+    V_kwargs = Q_kwargs.copy()
+    brain_kwargs = {'q_kwargs': q_kwargs, 'Q_kwargs': Q_kwargs, 'V_kwargs': V_kwargs, 'action_space': env.action_space}
 
-    ray.init(local_mode=True)
-    trainer = QtranTrainer(env_creator, brain_creator, population_size=5)
+    ray.init(local_mode=False)
+    trainer = QtranTrainer(env_creator, brain_kwargs, population_size=5)
