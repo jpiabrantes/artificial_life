@@ -100,20 +100,23 @@ class PPOActorCritic(kr.Model):
 
 
 class Qtran(kr.Model):
-    def __init__(self, q_kwargs, hidden_units, observation_space, action_space):
+    def __init__(self, q_kwargs, Q_kwargs, V_kwargs, action_space):
         super().__init__('VDNMixer')
         self.action_space = action_space
-        self.q = self._build_q(**q_kwargs)
-        self.Q = self._build_Q(**q_kwargs)
-        self.V = self._build_V(**q_kwargs)
+        self.q = self._build_q(**q_kwargs, action_space=action_space)
+        self.Q = self._build_Q(**Q_kwargs)
+        self.V = self._build_V(**V_kwargs)
 
-    def _build_Q(self, input_shape, conv_sizes, fc_sizes):
+    @staticmethod
+    def _build_Q(input_shape, conv_sizes, fc_sizes):
         return create_global_critic(input_shape, conv_sizes, fc_sizes, num_outputs=1)
 
-    def _build_V(self, input_shape, conv_sizes, fc_sizes):
+    @staticmethod
+    def _build_V(input_shape, conv_sizes, fc_sizes):
         return create_global_critic(input_shape, conv_sizes, fc_sizes, num_outputs=1)
 
-    def _build_q(self, hidden_units, observation_space, action_space):
+    @staticmethod
+    def _build_q(hidden_units, observation_space, action_space):
         input_layer = kl.Input(shape=observation_space.shape)
         dense = MLP(hidden_units, 0, observation_space.shape)(input_layer)
         stream_adv, stream_val = tf.split(dense, 2, axis=1)

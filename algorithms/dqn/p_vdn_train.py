@@ -27,13 +27,14 @@ class VDNTrainer:
         exp_name = 'basic'
         algorithm_folder = os.path.dirname(os.path.abspath(__file__))
         exp_folder = os.path.join(algorithm_folder, 'checkpoints', env.name, exp_name)
-        tensorboard_folder = os.path.join(exp_folder, 'tensorboard', 'dqn_%d' % int(time()))
+        tensorboard_folder = os.path.join(exp_folder, 'tensorboard', 'vdn_%d' % int(time()))
 
         self.weights = {}
         for species_index in range(population_size):
             brain = brain_creator()
             main_weights = brain.get_weights()
             self.weights[species_index] = Weights(main_weights, main_weights)
+            os.makedirs(os.path.join(exp_folder, str(species_index)), exist_ok=True)
 
         self.filters = {'ActorObsFilter': MeanStdFilter(shape=self.env.observation_space.shape)}
         filter_manager = FilterManager()
@@ -88,7 +89,7 @@ class VDNTrainer:
                         target_w.append(tau * mw + (1-tau)*tw)
                     self.weights[species_index] = Weights(main_weights, target_w)
                     species_folder = os.path.join(exp_folder, str(species_index))
-                    with open(os.path.join(species_folder, 'weights.pkl', 'wb')) as f:
+                    with open(os.path.join(species_folder, 'weights.pkl'), 'wb') as f:
                         pickle.dump(self.weights[species_index], f)
 
             # get ep_stats from samplers

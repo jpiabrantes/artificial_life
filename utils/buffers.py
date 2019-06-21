@@ -60,23 +60,23 @@ class QTranReplayBuffer:
     def __init__(self, buffer_size=20000):
         self.step_buffer = deque(maxlen=buffer_size)
         self.global_buffer = deque(maxlen=buffer_size)
+        self.loc_buffer = deque(maxlen=buffer_size)
 
-    def add_step(self, step, state_action_species):
+    def add_step(self, step, state_action_species, locations):
         """
         :param step: list with size #agents with experiences [(s, a, r, s', d), ...]
         :return:
         """
         self.step_buffer.append(step)
         self.global_buffer.append(state_action_species)
+        self.loc_buffer.append(locations)
 
     def add_buffer(self, buffer):
-        for step, state_action_species in zip(buffer.step_buffer, buffer.global_buffer):
+        for step, state_action_species, locations in zip(buffer.step_buffer, buffer.global_buffer,
+                                                         buffer.loc_buffer):
             self.step_buffer.append(step)
             self.global_buffer.append(state_action_species)
-
-    def sample_steps(self, size):
-        step_idx = np.random.choice(range(len(self.step_buffer)), size=size, replace=False)
-        return zip(*[(self.step_buffer[i], self.global_buffer[i]) for i in step_idx])
+            self.loc_buffer.append(locations)
 
 
 class COMABuffer:

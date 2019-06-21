@@ -28,12 +28,12 @@ class Sampler:
             raw_obs_dict, done_dict, ep_len, ep_rew = state['raw_obs_dict'], {'__all__': False}, state['ep_len'],\
                                                       state['ep_rew']
             for step in range(self.num_of_steps_per_env):
-                state_action_species = np.ones((env.n_rows, env.n_cols, len(env.State) + 2))*-1
+                state_action_species = np.ones((env.n_rows, env.n_cols, len(env.State) + 2), np.float32)*-1
                 state_action_species[:, :, :-2] = raw_obs_dict['state']
 
                 del raw_obs_dict['state']
                 # collect observations for each species
-                species_info = defaultdict(lambda: {'obs': [], 'agents': []})
+                species_info = defaultdict(lambda: {'obs': [], 'agents': [], 'locs': []})
                 for agent_name, raw_obs in raw_obs_dict.items():
                     species_index = agent_name_to_species_index_fn(agent_name)
                     species_info[species_index]['agents'].append(agent_name)
@@ -50,6 +50,8 @@ class Sampler:
                     info['actions'] = actions
                     for agent_name, action in zip(info['agents'], actions):
                         action_dict[agent_name] = action
+                        agent = env.agents[agent_name]
+                        info['locs'].append((agent.row, agent.col))
 
                 # step
                 n_raw_obs_dict, reward_dict, done_dict, info_dict = env.step(action_dict)
@@ -70,7 +72,8 @@ class Sampler:
                         else:
                             n_obs = obs * np.nan
                         step_buffer[species_index].append((obs, action, rew, n_obs, done))
-                    species_buffers[species_index].add_step(step_buffer[species_index], state_action_species)
+                    species_buffers[species_index].add_step(step_buffer[species_index], state_action_species,
+                                                            species_info[species_index]['locs'])
 
                 raw_obs_dict = n_raw_obs_dict
                 ep_rew += sum(reward_dict.values())
