@@ -178,5 +178,5 @@ if __name__ == '__main__':
     V_kwargs = Q_kwargs.copy()
     brain_kwargs = {'q_kwargs': q_kwargs, 'Q_kwargs': Q_kwargs, 'V_kwargs': V_kwargs, 'action_space': env.action_space}
 
-    ray.init(local_mode=True)
+    ray.init(local_mode=False)
     trainer = QtranTrainer(env_creator, brain_kwargs, population_size=5)

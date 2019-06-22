@@ -52,8 +52,8 @@ class Trainer:
             list_of_act_star[i] = main_qn.get_actions(obs, 0)
 
             # state_action
-            state_action_species[:, :, :-2] = obs_filter(state_action_species[:, :, :-2])
             state_action = state_action_species[:, :, :-1]
+            state_action[:, :, :-1] = obs_filter(state_action[:, :, :-1])
             states_actions[i] = state_action
 
             # state
@@ -68,8 +68,8 @@ class Trainer:
             for (row, col), act in zip(loc, list_of_act_star[i]):
                 state_action_star[row, col, -1] = act
             states_actions_star[i] = state_action_star
-            n_state_action_star[:, :, :-1] = obs_filter(n_state_action_star[:, :, :-1], update=False)
-            n_states_actions_star[i] = n_state_action_star
+            n_states_actions_star[i, :, :, :-1] = obs_filter(n_state_action_star[:, :, :-1], update=False)
+            n_states_actions_star[i, :, :, -1] = n_state_action_star[:, :, -1]
             target_q[i] = rew[0]
             alive_mask = np.logical_not(done)
             not_terminated_mask[i] = np.any(alive_mask)

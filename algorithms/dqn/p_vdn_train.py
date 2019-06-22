@@ -100,7 +100,7 @@ class VDNTrainer:
 
             if not (total_steps % 10):
                 with open(os.path.join(exp_folder, 'variables.pkl'), 'wb') as f:
-                    pickle.dump((self.filter, total_steps, episodes), f)
+                    pickle.dump((self.filters, total_steps, episodes), f)
 
             # get ep_stats from samplers
             metrics = {'Episodes': episodes, 'Sampling time': sampling_time.interval,
