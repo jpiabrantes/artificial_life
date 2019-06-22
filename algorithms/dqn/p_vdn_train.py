@@ -33,6 +33,8 @@ class VDNTrainer:
         for species_index in range(population_size):
             species_folder = os.path.join(exp_folder, str(species_index))
             if load:
+                with open(os.path.join(exp_folder, 'variables.pkl'), 'rb') as f:
+                    self.filter, total_steps, episodes = pickle.load(f)
                 with open(os.path.join(species_folder, 'weights.pkl'), 'rb') as f:
                     self.weights[species_index] = pickle.load(f)
             else:
@@ -40,9 +42,9 @@ class VDNTrainer:
                 brain = brain_creator()
                 main_weights = brain.get_weights()
                 self.weights[species_index] = Weights(main_weights, main_weights)
+                self.filters = {'ActorObsFilter': MeanStdFilter(shape=self.env.observation_space.shape)}
+                total_steps, episodes = 0, 0
 
-
-        self.filters = {'ActorObsFilter': MeanStdFilter(shape=self.env.observation_space.shape)}
         filter_manager = FilterManager()
 
         species_dict = {species_index: {'steps': 0, 'eps': start_eps, 'optimiser_weights': None}
@@ -54,8 +56,6 @@ class VDNTrainer:
         # Set the rate of random action decrease.
 
         train_summary_writer = tf.summary.create_file_writer(tensorboard_folder)
-        episodes = 0
-        total_steps = 0
         while True:
             total_steps += 1
             with Timer() as sampling_time:
@@ -97,6 +97,10 @@ class VDNTrainer:
                     species_folder = os.path.join(exp_folder, str(species_index))
                     with open(os.path.join(species_folder, 'weights.pkl'), 'wb') as f:
                         pickle.dump(self.weights[species_index], f)
+
+            if not (total_steps % 10):
+                with open(os.path.join(exp_folder, 'variables.pkl'), 'wb') as f:
+                    pickle.dump((self.filter, total_steps, episodes), f)
 
             # get ep_stats from samplers
             metrics = {'Episodes': episodes, 'Sampling time': sampling_time.interval,
