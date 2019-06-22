@@ -58,25 +58,28 @@ class VDNReplayBuffer:
 
 class QTranReplayBuffer:
     def __init__(self, buffer_size=20000):
-        self.step_buffer = deque(maxlen=buffer_size)
-        self.global_buffer = deque(maxlen=buffer_size)
-        self.loc_buffer = deque(maxlen=buffer_size)
+        self.step_buf = deque(maxlen=buffer_size)
+        self.sta_act_spe_buf = deque(maxlen=buffer_size)
+        self.loc_buf = deque(maxlen=buffer_size)
+        self.n_sta_act_spe_buf = deque(maxlen=buffer_size)
 
-    def add_step(self, step, state_action_species, locations):
+    def add_step(self, step, state_action_species, locations, n_state_action):
         """
         :param step: list with size #agents with experiences [(s, a, r, s', d), ...]
         :return:
         """
-        self.step_buffer.append(step)
-        self.global_buffer.append(state_action_species)
-        self.loc_buffer.append(locations)
+        self.step_buf.append(step)
+        self.sta_act_spe_buf.append(state_action_species)
+        self.loc_buf.append(locations)
+        self.n_sta_act_spe_buf.append(n_state_action)
 
     def add_buffer(self, buffer):
-        for step, state_action_species, locations in zip(buffer.step_buffer, buffer.global_buffer,
-                                                         buffer.loc_buffer):
-            self.step_buffer.append(step)
-            self.global_buffer.append(state_action_species)
-            self.loc_buffer.append(locations)
+        for step, state_action_species, locations, n_state_action in zip(buffer.step_buf, buffer.sta_act_spe_buf,
+                                                                         buffer.loc_buf, buffer.n_sta_act_spe_buf):
+            self.step_buf.append(step)
+            self.sta_act_spe_buf.append(state_action_species)
+            self.loc_buf.append(locations)
+            self.n_sta_act_spe_buf.append(n_state_action)
 
 
 class COMABuffer:

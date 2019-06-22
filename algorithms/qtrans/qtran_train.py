@@ -20,7 +20,7 @@ Weights = namedtuple('Weights', ('main', 'target'))
 
 class QtranTrainer:
     def __init__(self, env_creator,  brain_kwargs, population_size, gamma=0.99,
-                 start_eps=1, end_eps=0.1, annealing_steps=50000, tau=0.001, n_trainers=4,
+                 start_eps=1, end_eps=0.1, annealing_steps=50000, tau=0.001, n_trainers=5,
                  n_samplers=40, num_envs_per_sampler=10, num_of_steps_per_sample=1, learning_rate=0.0005,
                  opt_coeff=1, nopt_coeff=1):
         env = env_creator()
@@ -38,15 +38,16 @@ class QtranTrainer:
                 self.weights[species_index] = Weights(brain.get_weights(), brain.Q.get_weights())
                 os.makedirs(os.path.join(exp_folder, str(species_index)), exist_ok=True)
 
-        self.filters = {'ActorObsFilter': MeanStdFilter(shape=self.env.observation_space.shape)}
+        self.actor_filters = {'ActorObsFilter': MeanStdFilter(shape=self.env.observation_space.shape)}
+        self.critic_filters = {'CriticObsFilter': MeanStdFilter(shape=self.env.critic_observation_shape)}
         filter_manager = FilterManager()
 
         species_dict = {species_index: {'steps': 0, 'eps': start_eps, 'optimiser_weights': None}
                         for species_index in range(population_size)}
         samplers = [Sampler.remote(env_creator, num_envs_per_sampler, num_of_steps_per_sample, brain_kwargs)
                     for _ in range(n_samplers)]
-        trainers = [Trainer.remote(brain_kwargs, gamma, learning_rate, opt_coeff, nopt_coeff)
-                    for _ in range(n_trainers)]
+        trainers = [Trainer.remote(brain_kwargs, gamma, learning_rate, opt_coeff, nopt_coeff,
+                                   env.critic_observation_shape) for _ in range(n_trainers)]
 
         # Set the rate of random action decrease.
 
@@ -56,7 +57,7 @@ class QtranTrainer:
         while True:
             total_steps += 1
             with Timer() as sampling_time:
-                filter_manager.synchronize(self.filters, samplers)
+                filter_manager.synchronize(self.actor_filters, samplers)
                 weights_id = ray.put({species_index: w.main for species_index, w in self.weights.items()})
                 eps_id = ray.put({species_index: dict_['eps'] for species_index, dict_ in species_dict.items()})
                 species_buffers_list = ray.get([sampler.rollout.remote(weights_id, eps_id) for sampler in samplers])
@@ -66,9 +67,10 @@ class QtranTrainer:
             training_results = []
             i = 0
             with Timer() as training_time:
+                filter_manager.synchronize(self.critic_filters, trainers)
                 for species_index, buffer in species_buffers.items():
                     dict_ = species_dict[species_index]
-                    dict_['steps'] += len(buffer.step_buffer)
+                    dict_['steps'] += len(buffer.step_buf)
                     if dict_['steps'] > annealing_steps:
                         coeff = (dict_['steps']-annealing_steps)/annealing_steps
                         dict_['eps'] = max(coeff * 0.01 + (1 - coeff) * end_eps, 0.01)
@@ -76,8 +78,9 @@ class QtranTrainer:
                         coeff = dict_['steps']/annealing_steps
                         dict_['eps'] = max(coeff*end_eps+(1-coeff)*start_eps, end_eps)
                     training_species_idx.append(species_index)
-                    training_results.append(trainers[i].train.remote(self.weights[species_index], buffer.step_buffer,
-                                                                     buffer.global_buffer, buffer.loc_buffer,
+                    training_results.append(trainers[i].train.remote(self.weights[species_index], buffer.step_buf,
+                                                                     buffer.sta_act_spe_buf, buffer.loc_buf,
+                                                                     buffer.n_sta_act_spe_buf,
                                                                      species_dict[species_index]['optimiser_weights'],
                                                                      species_index))
                     i = (i + 1) % len(trainers)
@@ -97,6 +100,10 @@ class QtranTrainer:
                     species_folder = os.path.join(exp_folder, str(species_index))
                     with open(os.path.join(species_folder, 'weights.pkl'), 'wb') as f:
                         pickle.dump(self.weights[species_index], f)
+
+            if not (total_steps % 10):
+                with open(os.path.join(exp_folder, 'variables.pkl'), 'wb') as f:
+                    pickle.dump((self.actor_filters, self.critic_filters, episodes, total_steps), f)
 
             # get ep_stats from samplers
             metrics = {'Episodes': episodes, 'Sampling time': sampling_time.interval,
@@ -171,5 +178,5 @@ if __name__ == '__main__':
     V_kwargs = Q_kwargs.copy()
     brain_kwargs = {'q_kwargs': q_kwargs, 'Q_kwargs': Q_kwargs, 'V_kwargs': V_kwargs, 'action_space': env.action_space}
 
-    ray.init(local_mode=False)
+    ray.init(local_mode=True)
     trainer = QtranTrainer(env_creator, brain_kwargs, population_size=5)
