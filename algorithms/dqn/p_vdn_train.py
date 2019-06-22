@@ -20,7 +20,7 @@ Weights = namedtuple('Weights', ('main', 'target'))
 class VDNTrainer:
     def __init__(self, env_creator,  brain_creator, population_size, gamma=0.99,
                  start_eps=1, end_eps=0.1, annealing_steps=50000, tau=0.001, n_trainers=5,
-                 n_samplers=40, num_envs_per_sampler=7, num_of_steps_per_sample=1, learning_rate=0.0005):
+                 n_samplers=40, num_envs_per_sampler=5, num_of_steps_per_sample=1, learning_rate=0.0005, load=True):
         env = env_creator()
         self.env = env
 
@@ -31,10 +31,16 @@ class VDNTrainer:
 
         self.weights = {}
         for species_index in range(population_size):
-            brain = brain_creator()
-            main_weights = brain.get_weights()
-            self.weights[species_index] = Weights(main_weights, main_weights)
-            os.makedirs(os.path.join(exp_folder, str(species_index)), exist_ok=True)
+            species_folder = os.path.join(exp_folder, str(species_index))
+            if load:
+                with open(os.path.join(species_folder, 'weights.pkl'), 'rb') as f:
+                    self.weights[species_index] = pickle.load(f)
+            else:
+                os.makedirs(species_folder, exist_ok=True)
+                brain = brain_creator()
+                main_weights = brain.get_weights()
+                self.weights[species_index] = Weights(main_weights, main_weights)
+
 
         self.filters = {'ActorObsFilter': MeanStdFilter(shape=self.env.observation_space.shape)}
         filter_manager = FilterManager()

@@ -7,7 +7,7 @@ import numpy as np
 from envs.deadly_colony.deadly_colony import DeadlyColony
 from envs.deadly_colony.env_config import env_default_config
 
-from models.base import create_vision_and_fc_network, COMAActorCritic
+from models.base import create_vision_and_fc_network, COMAActorCritic, VDNMixer
 from replay.rollout import rollout
 
 from algorithms.evolution.helpers import load_variables
@@ -46,7 +46,7 @@ ac_kwarg = {'actor_args': policy_args, 'critic_args': critic_args, 'observation_
 ac_creator = lambda: COMAActorCritic(**ac_kwarg)
 
 
-exp_name = 'CENTRAL_PPO'
+exp_name = 'VND'
 if exp_name == 'EvolutionStrategies':
     last_generation, mu0_list, stds_list, horizons_list, returns_list, filters = load_variables(env)
     obs_filter = filters['MeanStdFilter']
@@ -79,6 +79,21 @@ elif exp_name == 'CENTRAL_PPO':
     weights, filters, species_sampler, episodes, training_samples = central_load_generation(ac_creator(), env, 0, 9)
     species_indices = species_sampler.sample_steps(5).tolist()
     policies = {i: policy_creator() for i in species_indices}
+    for species_index, policy in policies.items():
+        policy.set_weights(weights[species_index].actor)
+    obs_filter = filters['ActorObsFilter']
+    print(policies)
+    print(species_indices)
+elif exp_name == 'VDN':
+    q_kwargs = {'hidden_units': [512, 256, 128],
+                'observation_space': env.observation_space,
+                'action_space': env.action_space}
+    weights = vdn_get_weights(env, 'basic')
+    policies = [VDNMixer(**q_kwargs) for _ in range(5)]
+    for policy, (i, w) in zip(policies, weights.items()):
+        policy.load_weights(weights)
+
+
     for species_index, policy in policies.items():
         policy.set_weights(weights[species_index].actor)
     obs_filter = filters['ActorObsFilter']
