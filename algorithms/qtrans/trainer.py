@@ -52,7 +52,7 @@ class Trainer:
             list_of_act_star[i] = main_qn.get_actions(obs, 0)
 
             # state_action
-            state_action = state_action_species[:, :, :-1]
+            state_action = state_action_species[:, :, :-1].copy()
             state_action[:, :, :-1] = obs_filter(state_action[:, :, :-1])
             states_actions[i] = state_action
 

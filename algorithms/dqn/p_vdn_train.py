@@ -17,6 +17,19 @@ Networks = namedtuple('Networks', ('main', 'target'))
 Weights = namedtuple('Weights', ('main', 'target'))
 
 
+def load(env, exp_name):
+    algorithm_folder = os.path.dirname(os.path.abspath(__file__))
+    exp_folder = os.path.join(algorithm_folder, 'checkpoints', env.name, exp_name)
+    with open(os.path.join(exp_folder, 'variables.pkl'), 'rb') as f:
+        filters, total_steps, episodes = pickle.load(f)
+    weights = {}
+    for species_index in range(5):
+        species_folder = os.path.join(exp_folder, str(species_index))
+        with open(os.path.join(species_folder, 'weights.pkl'), 'rb') as f:
+            weights[species_index] = pickle.load(f)
+    return filters, weights
+
+
 class VDNTrainer:
     def __init__(self, env_creator,  brain_creator, population_size, gamma=0.99,
                  start_eps=1, end_eps=0.1, annealing_steps=50000, tau=0.001, n_trainers=5,
@@ -33,8 +46,6 @@ class VDNTrainer:
         for species_index in range(population_size):
             species_folder = os.path.join(exp_folder, str(species_index))
             if load:
-                with open(os.path.join(exp_folder, 'variables.pkl'), 'rb') as f:
-                    self.filters, total_steps, episodes = pickle.load(f)
                 with open(os.path.join(species_folder, 'weights.pkl'), 'rb') as f:
                     self.weights[species_index] = pickle.load(f)
             else:
@@ -42,8 +53,12 @@ class VDNTrainer:
                 brain = brain_creator()
                 main_weights = brain.get_weights()
                 self.weights[species_index] = Weights(main_weights, main_weights)
-                self.filters = {'ActorObsFilter': MeanStdFilter(shape=self.env.observation_space.shape)}
-                total_steps, episodes = 0, 0
+        if load:
+            with open(os.path.join(exp_folder, 'variables.pkl'), 'rb') as f:
+                self.filters, total_steps, episodes = pickle.load(f)
+        else:
+            self.filters = {'ActorObsFilter': MeanStdFilter(shape=self.env.observation_space.shape)}
+            total_steps, episodes = 0, 0
 
         filter_manager = FilterManager()
 
