@@ -34,7 +34,7 @@ class VDNTrainer:
             species_folder = os.path.join(exp_folder, str(species_index))
             if load:
                 with open(os.path.join(exp_folder, 'variables.pkl'), 'rb') as f:
-                    self.filter, total_steps, episodes = pickle.load(f)
+                    self.filters, total_steps, episodes = pickle.load(f)
                 with open(os.path.join(species_folder, 'weights.pkl'), 'rb') as f:
                     self.weights[species_index] = pickle.load(f)
             else:

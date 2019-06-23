@@ -63,7 +63,7 @@ class Trainer:
             states[i] = state
 
             # state_action_star
-            # TODO: filter g_states
+            # TODO: DNA state should say the species!
             state_action_star = state_action.copy()
             for (row, col), act in zip(loc, list_of_act_star[i]):
                 state_action_star[row, col, -1] = act

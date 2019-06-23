@@ -60,6 +60,7 @@ class Sampler:
                                                             "\n{} vs {}".format(label, set_, action_dict.keys())
 
                 # Save the experience in each species episode buffer
+                species_indices = list(species_info.keys())
                 step_buffer = defaultdict(list)
                 for species_index, info in species_info.items():
                     for agent_name, obs, action in zip(info['agents'], info['obs'], info['actions']):
@@ -85,8 +86,11 @@ class Sampler:
                         agent = env.agents[agent_name]
                         row, col = agent.row, agent.col
                         n_state_action[row, col, -1] = action
+                for species_index in species_indices:
+                    n_sta_act = n_state_action.copy()
+                    n_sta_act[:, :, env.State.DNA] = n_sta_act[:, :, env.State.DNA] == species_index
                     species_buffers[species_index].add_step(step_buffer[species_index], state_action_species,
-                                                            species_info[species_index]['locs'], n_state_action)
+                                                            species_info[species_index]['locs'], n_sta_act)
 
                 raw_obs_dict = n_raw_obs_dict
                 ep_rew += sum(reward_dict.values())
