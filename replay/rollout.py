@@ -5,6 +5,7 @@ from collections import defaultdict
 import pandas as pd
 import numpy as np
 
+from models.base import VDNMixer
 from utils.misc import agent_name_to_species_index_fn
 
 this_folder = os.path.dirname(os.path.abspath(__file__))
@@ -60,10 +61,15 @@ def rollout(env, exp_name, policies, species_indices, obs_filter):
         action_dict = {}
         for species_index, info in species_info.items():
             observation_arr = np.stack(info['obs'])
-            actions, logp, probs = policies[species_index].action_logp_pi(observation_arr)
-            for agent_name, action_probs, action in zip(info['agents'], probs, actions):
-                action_dict[agent_name] = action
-                episode_dict['agents'][agent_name]['action_probs'] = action_probs
+            if type(policies[species_index]) == VDNMixer:
+                actions = policies[species_index].get_actions(observation_arr, 0)
+                for agent_name, action in zip(info['agents'], actions):
+                    action_dict[agent_name] = action
+            else:
+                actions, logp, probs = policies[species_index].action_logp_pi(observation_arr)
+                for agent_name, action_probs, action in zip(info['agents'], probs, actions):
+                    action_dict[agent_name] = action
+                    episode_dict['agents'][agent_name]['action_probs'] = action_probs
 
         # competitive stats
         env.competitive_scenario.add_rows(action_dict)

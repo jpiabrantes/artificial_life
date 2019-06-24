@@ -65,12 +65,7 @@ class Sampler:
                 for species_index, info in species_info.items():
                     for agent_name, obs, action in zip(info['agents'], info['obs'], info['actions']):
                         rew, done = reward_dict[agent_name], done_dict[agent_name]
-                        n_obs = n_raw_obs_dict.get(agent_name, None)
-                        if n_obs is not None:
-                            n_obs = self.filters['ActorObsFilter'](n_obs, update=False)
-                        else:
-                            n_obs = obs * np.nan
-                        step_buffer[species_index].append((obs, action, rew, n_obs, done))
+                        step_buffer[species_index].append((obs, action, rew, done))
 
                 # compute n_state_action_star
                 n_state_action = np.ones((env.n_rows, env.n_cols, len(env.State) + 1), np.float32) * -1

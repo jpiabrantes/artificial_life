@@ -1,3 +1,4 @@
+from collections import namedtuple
 import tensorflow as tf
 import numpy as np
 
@@ -14,12 +15,16 @@ from algorithms.evolution.helpers import load_variables
 from algorithms.ppo.multi_ppo import load_models_and_filters
 from algorithms.coma.coma_trainer import load_generation
 from algorithms.central_ppo.central_ppo import load_generation as central_load_generation
+from algorithms.dqn.p_vdn_train import load as vdn_load
+
+
+Weights = namedtuple('Weights', ('main', 'target'))
 
 
 # env
 # env = BacteriaColony(env_default_config)
 config = env_default_config.copy()
-config['max_iters'] = 1000
+config['max_iters'] = 500
 config['update_stats'] = True
 env = DeadlyColony(config)
 
@@ -46,7 +51,7 @@ ac_kwarg = {'actor_args': policy_args, 'critic_args': critic_args, 'observation_
 ac_creator = lambda: COMAActorCritic(**ac_kwarg)
 
 
-exp_name = 'VND'
+exp_name = 'VDN'
 if exp_name == 'EvolutionStrategies':
     last_generation, mu0_list, stds_list, horizons_list, returns_list, filters = load_variables(env)
     obs_filter = filters['MeanStdFilter']
@@ -88,15 +93,13 @@ elif exp_name == 'VDN':
     q_kwargs = {'hidden_units': [512, 256, 128],
                 'observation_space': env.observation_space,
                 'action_space': env.action_space}
-    weights = vdn_get_weights(env, 'basic')
+    filters, weights = vdn_load(env, 'basic')
+    obs_filter = filters['ActorObsFilter']
     policies = [VDNMixer(**q_kwargs) for _ in range(5)]
     for policy, (i, w) in zip(policies, weights.items()):
-        policy.load_weights(weights)
+        policy.set_weights(w.main)
+    species_indices = list(range(5))
 
-
-    for species_index, policy in policies.items():
-        policy.set_weights(weights[species_index].actor)
-    obs_filter = filters['ActorObsFilter']
     print(policies)
     print(species_indices)
 else:

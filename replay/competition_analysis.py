@@ -38,19 +38,19 @@ def plot_conditional(dfs, df_names, label, value, feature, range):
         results = np.zeros(len(range))
         for i, x in enumerate(range):
             results[i] = ((df[label].values == value) & (df[feature].values == x)).sum()/(df[feature].values == x).sum()
-        plt.plot(range, results, '.', label=df_name)
+        plt.plot(range, results, label=df_name)
     plt.ylabel('P(%s==%d, %s=x)' % (label, value, feature))
     plt.xlabel(feature)
     plt.legend(loc='best')
     plt.show()
 
 
-df_names = ['Survive', 'Family', 'Legacy']
-dfs = [same_df.loc[mask, :] for mask in (survive_mask, family_mask, legacy_mask)]
+df_names = ['VDN']
+dfs = [same_df]
 plot_conditional(dfs, df_names, 'compete_1', 1, 'delta age', np.arange(-50, 50, 1))
 
-fig, axs = plt.subplots(1, 3, sharey=True, sharex=True)
-for ax, df, df_name in zip(axs, dfs, df_names):
+fig, axs = plt.subplots(1, 1, sharey=True, sharex=True)
+for ax, df, df_name in zip([axs], dfs, df_names):
     tdf = df.loc[df['CD'] == 1]
     ax.scatter(tdf.age_1, tdf.age_2, color='green', alpha=0.5, label='CD')
     tdf = df.loc[df['DC'] == 1]
@@ -66,8 +66,8 @@ for ax, df, df_name in zip(axs, dfs, df_names):
     ax.legend(loc='best')
 
 
-fig, axs = plt.subplots(1, 3, sharey=True, sharex=True)
-for ax, df, df_name in zip(axs, dfs, df_names):
+fig, axs = plt.subplots(1, 1, sharey=True, sharex=True)
+for ax, df, df_name in zip([axs], dfs, df_names):
     tdf = df.loc[df['CD'] == 1]
     ax.scatter(tdf.sugar_1, tdf.sugar_2, color='green', alpha=0.5, label='CD')
     tdf = df.loc[df['DC'] == 1]
@@ -82,10 +82,10 @@ for ax, df, df_name in zip(axs, dfs, df_names):
     ax.legend(loc='best')
 
 
-fig, axs = plt.subplots(1, 3, sharey=True, sharex=True)
-for ax, df, df_name in zip(axs, dfs, df_names):
-    df.health_1 += np.random.rand(len(df))
-    df.health_2 += np.random.rand(len(df))
+fig, axs = plt.subplots(1, 1, sharey=True, sharex=True)
+for ax, df, df_name in zip([axs], dfs, df_names):
+    df.health_1 += (np.random.rand(len(df))-0.5)*0.5
+    df.health_2 += (np.random.rand(len(df))-0.5)*0.5
     tdf = df.loc[df['CD'] == 1]
     ax.scatter(tdf.health_1, tdf.health_2, color='green', alpha=0.5, label='CD')
     tdf = df.loc[df['DC'] == 1]

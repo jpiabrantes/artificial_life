@@ -60,8 +60,8 @@ class MainHolder:
         attr_screen = self.screen.subsurface(self.width // 2, 0, self.width//2, self.height//4)
         self.children.add(BacteriaAttributeRenderer(attr_screen, self.g_variables))
 
-        policy_screen = self.screen.subsurface(self.width // 2, self.height//4, self.width//2, self.height // 4)
-        self.children.add(PolicyRenderer(policy_screen, self.g_variables))
+        # policy_screen = self.screen.subsurface(self.width // 2, self.height//4, self.width//2, self.height // 4)
+        # self.children.add(PolicyRenderer(policy_screen, self.g_variables))
 
         family_screen = self.screen.subsurface(self.width // 2, 2*self.height//4, self.width//2, 2*self.height // 4)
         self.children.add(FamilyRenderer(family_screen, self.g_variables))
@@ -142,7 +142,7 @@ if __name__ == '__main__':
     from envs.deadly_colony.env_config import env_default_config
 
     env = DeadlyColony(env_default_config)
-    expname = 'CENTRAL_PPO'  # 'EvolutionStrategies' ,'MultiPPO'
+    expname = 'VDN'  # 'EvolutionStrategies' ,'MultiPPO'
 
     with open(os.path.join('./dicts', expname+'.pkl'), 'rb') as f:
         dicts = pickle.load(f)

@@ -11,23 +11,37 @@ from utils.filters import MeanStdFilter
 @ray.remote(num_cpus=1)
 class Sampler:
     def __init__(self, env_creator, num_of_envs, num_of_steps_per_env, qn_creator):
+        self.env_creator = env_creator
         self.num_of_steps_per_env = num_of_steps_per_env
         self.envs = [env_creator() for _ in range(num_of_envs)]
+        self.max_iters = self.envs[0].max_iters
+        [self._randomise_episode_length(env) for env in self.envs]
         self.state = [{'raw_obs_dict': env.reset(), 'ep_len': 0, 'ep_rew': 0} for env in self.envs]
         # TODO: check random seed
         self.filters = {'ActorObsFilter': MeanStdFilter(shape=self.envs[0].observation_space.shape)}
         self.qn = qn_creator()
         self.ep_stats = EpStats()
 
-    def rollout(self, weights, eps_dict):
+    def _randomise_episode_length(self, env):
+        noise = int(self.max_iters*0.1)
+        env.max_iters += np.random.randint(-noise, noise + 1)
+
+    def rollout(self, weights, eps_dict=None, training=True):
         qn = self.qn
         species_indices = list(weights.keys())
         species_buffers = {species_index: VDNReplayBuffer() for species_index in species_indices}
-        for env_i, env in enumerate(self.envs):
+        envs = self.envs if training else [self.env_creator()]
+        num_of_steps = self.num_of_steps_per_env if training else envs[0].max_iters
+        eps_dict = defaultdict(float) if eps_dict is None else eps_dict
+
+        for env_i, env in enumerate(envs):
             state = self.state[env_i]
-            raw_obs_dict, done_dict, ep_len, ep_rew = state['raw_obs_dict'], {'__all__': False}, state['ep_len'],\
-                                                      state['ep_rew']
-            for step in range(self.num_of_steps_per_env):
+            if training:
+                raw_obs_dict, done_dict, ep_len, ep_rew = state['raw_obs_dict'], {'__all__': False}, state['ep_len'],\
+                                                          state['ep_rew']
+            else:
+                raw_obs_dict, done_dict, ep_len, ep_rew = env.reset(), {'__all__': False}, 0, 0
+            for step in range(num_of_steps):
                 del raw_obs_dict['state']
                 # collect observations for each species
                 species_info = defaultdict(lambda: {'obs': [], 'agents': []})
@@ -56,18 +70,19 @@ class Sampler:
                     assert set(action_dict.keys()) == set_, "You should have a {} for each agent that sent an action." \
                                                             "\n{} vs {}".format(label, set_, action_dict.keys())
 
-                # Save the experience in each species episode buffer
-                step_buffer = defaultdict(list)
-                for species_index, info in species_info.items():
-                    for agent_name, obs, action in zip(info['agents'], info['obs'], info['actions']):
-                        rew, done = reward_dict[agent_name], done_dict[agent_name]
-                        n_obs = n_raw_obs_dict.get(agent_name, None)
-                        if n_obs is not None:
-                            n_obs = self.filters['ActorObsFilter'](n_obs, update=False)
-                        else:
-                            n_obs = obs * np.nan
-                        step_buffer[species_index].append((obs, action, rew, n_obs, done))
-                    species_buffers[species_index].add_step(step_buffer[species_index])
+                if training:
+                    # Save the experience in each species episode buffer
+                    step_buffer = defaultdict(list)
+                    for species_index, info in species_info.items():
+                        for agent_name, obs, action in zip(info['agents'], info['obs'], info['actions']):
+                            rew, done = reward_dict[agent_name], done_dict[agent_name]
+                            n_obs = n_raw_obs_dict.get(agent_name, None)
+                            if n_obs is not None:
+                                n_obs = self.filters['ActorObsFilter'](n_obs, update=False)
+                            else:
+                                n_obs = obs * np.nan
+                            step_buffer[species_index].append((obs, action, rew, n_obs, done))
+                        species_buffers[species_index].add_step(step_buffer[species_index])
 
                 raw_obs_dict = n_raw_obs_dict
                 ep_rew += sum(reward_dict.values())
@@ -76,10 +91,17 @@ class Sampler:
                     stats = {'ep_len': ep_len, 'ep_rew': ep_rew}
                     stats.update(info_dict['__all__'])
                     self.ep_stats.add(stats)
-                    raw_obs_dict, ep_len, ep_rew = env.reset(), 0, 0
-
-            self.state[env_i] = {'raw_obs_dict': raw_obs_dict, 'ep_len': ep_len, 'ep_rew': ep_rew}
-        return species_buffers
+                    if training:
+                        raw_obs_dict, ep_len, ep_rew = env.reset(), 0, 0
+                        self._randomise_episode_length(env)
+                    else:
+                        break
+            if training:
+                self.state[env_i] = {'raw_obs_dict': raw_obs_dict, 'ep_len': ep_len, 'ep_rew': ep_rew}
+        if training:
+            return species_buffers
+        else:
+            return self.get_ep_stats()
 
     def get_ep_stats(self):
         return self.ep_stats.get()

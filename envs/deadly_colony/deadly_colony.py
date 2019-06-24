@@ -276,7 +276,7 @@ class DeadlyColony:
                 left, top, width, height = [int(round(f)) for f in ((col+.05)*scale, (row+.05)*scale,
                                                                     scale*0.9, scale*0.2)]
                 img[top: top+height, left: left+width, :] = np.array((0, 0, 255), np.uint8)
-                damage_width = int(round((1-health/6)*width))
+                damage_width = int(round((1-health/2)*width))
                 img[top: top + height, left: left + damage_width, :] = np.array((255, 0, 0), np.uint8)
 
             return img
@@ -420,7 +420,7 @@ class Tile:
     def find_random_neighbour(self):
         neighbours = []
         for tile in self.neighbours:
-            if tile.agent:
+            if tile.agent and tile.agent.age:
                 neighbours.append(tile.agent)
         if len(neighbours):
             return np.random.choice(neighbours)

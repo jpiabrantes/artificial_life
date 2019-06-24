@@ -32,8 +32,9 @@ def load(env, exp_name):
 
 class VDNTrainer:
     def __init__(self, env_creator,  brain_creator, population_size, gamma=0.99,
-                 start_eps=1, end_eps=0.1, annealing_steps=50000, tau=0.001, n_trainers=5,
-                 n_samplers=40, num_envs_per_sampler=5, num_of_steps_per_sample=1, learning_rate=0.0005, load=True):
+                 start_eps=1, end_eps=0.1, annealing_steps=50000, tau=0.001, n_trainers=2,
+                 n_samplers=2, num_envs_per_sampler=5, num_of_steps_per_sample=1, learning_rate=0.0005, load=False,
+                 test_freq=20):
         env = env_creator()
         self.env = env
 
@@ -60,10 +61,14 @@ class VDNTrainer:
             self.filters = {'ActorObsFilter': MeanStdFilter(shape=self.env.observation_space.shape)}
             total_steps, episodes = 0, 0
 
+        last_test = episodes
         filter_manager = FilterManager()
-
-        species_dict = {species_index: {'steps': 0, 'eps': start_eps, 'optimiser_weights': None}
-                        for species_index in range(population_size)}
+        if load:
+            species_dict = {species_index: {'steps': annealing_steps*20, 'eps': start_eps, 'optimiser_weights': None}
+                            for species_index in range(population_size)}
+        else:
+            species_dict = {species_index: {'steps': 0, 'eps': start_eps, 'optimiser_weights': None}
+                            for species_index in range(population_size)}
         samplers = [Sampler.remote(env_creator, num_envs_per_sampler, num_of_steps_per_sample,
                                    brain_creator) for _ in range(n_samplers)]
         trainers = [Trainer.remote(brain_creator, gamma, learning_rate) for _ in range(n_trainers)]
@@ -88,7 +93,7 @@ class VDNTrainer:
                     dict_ = species_dict[species_index]
                     dict_['steps'] += len(buffer.buffer)
                     if dict_['steps'] > annealing_steps:
-                        coeff = (dict_['steps']-annealing_steps)/annealing_steps
+                        coeff = (dict_['steps']-annealing_steps)/(10*annealing_steps)
                         dict_['eps'] = max(coeff * 0.01 + (1 - coeff) * end_eps, 0.01)
                     else:
                         coeff = dict_['steps']/annealing_steps
@@ -126,6 +131,15 @@ class VDNTrainer:
             if ep_metrics['EpisodesThisIter']:
                 metrics.update(ep_metrics)
                 episodes += ep_metrics['EpisodesThisIter']
+
+            if (episodes - last_test) >= test_freq:
+                last_test = episodes
+                filter_manager.synchronize(self.filters, samplers)
+                weights_id = ray.put({species_index: w.main for species_index, w in self.weights.items()})
+                ep_stats = ray.get([s.rollout.remote(weights_id, training=False) for s in samplers])
+                test_metrics = self._concatenate_ep_stats(ep_stats)
+                test_metrics = {'test_%s' % k: v for k, v in test_metrics.items()}
+                metrics.update(test_metrics)
 
             mean_eps, mean_steps = [], []
             for species_index, dict_ in species_dict.items():

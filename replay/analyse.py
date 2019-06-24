@@ -27,9 +27,8 @@ def plot_conditional(dfs, df_names, label, value, feature, range):
     plt.show()
 
 
-paths = ['replay/data/%s' % name for name in ('CENTRAL_PPO_SURVIVE.csv', 'CENTRAL_PPO_FAMILY.csv',
-                                              'CENTRAL_PPO_LEGACY.csv', 'EvolutionStrategies.csv')]
-df_names = [r'$\mathrm{PPO}^\mathrm{S}$', r'$\mathrm{PPO}^\mathrm{S+F}$', r'$\mathrm{PPO}^\mathrm{S+F+L}$', 'ES']
+paths = ['replay/data/%s' % name for name in ('VDN.csv',)]
+df_names = ['VDN']
 
 dfs = [load_df(path) for path in paths]
 

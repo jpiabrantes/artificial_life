@@ -42,9 +42,8 @@ class Trainer:
                                                                                        n_sta_act_star)):
             # step: list of experiences of size #n_agents
             step = np.stack(step)  # n_agents, 5
-            obs, act, rew, n_obs, done = [np.array(x.tolist(), t)
-                                          for x, t in zip(step.T, (np.float32, np.int32, np.float32,
-                                                                   np.float32, np.bool))]
+            obs, act, rew, done = [np.array(x.tolist(), t) for x, t in zip(step.T, (np.float32, np.int32, np.float32,
+                                                                                    np.bool))]
             assert len(np.unique(rew)) == 1
             # obs: n_agents, obs_dim
             list_of_obs[i] = obs
@@ -63,7 +62,6 @@ class Trainer:
             states[i] = state
 
             # state_action_star
-            # TODO: DNA state should say the species!
             state_action_star = state_action.copy()
             for (row, col), act in zip(loc, list_of_act_star[i]):
                 state_action_star[row, col, -1] = act
