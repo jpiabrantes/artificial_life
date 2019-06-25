@@ -19,6 +19,27 @@ class EpStats:
         return result
 
 
+def concatenate_ep_stats(stats_list, min_and_max=False, include_std=False):
+    total_stats = None
+    for stats in stats_list:
+        if total_stats is None:
+            total_stats = stats
+        else:
+            for k, v in stats.items():
+                total_stats[k].extend(v)
+
+    metrics = {'EpisodesThisIter': len(total_stats['ep_len'])}
+    if metrics['EpisodesThisIter']:
+        for k, v in total_stats.items():
+            metrics['Avg_' + k] = np.mean(v)
+            if min_and_max:
+                metrics['Min_' + k] = np.min(v)
+                metrics['Max_' + k] = np.max(v)
+            if include_std:
+                metrics['Std_' + k] = np.std(v)
+    return metrics
+
+
 class RNNReplayBuffer:
     def __init__(self, buffer_size=1000):
         self.buffer = deque(maxlen=buffer_size)

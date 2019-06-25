@@ -111,7 +111,7 @@ class Sampler:
         if training:
             return species_buffers
         else:
-            self.get_ep_stats()
+            return self.get_ep_stats()
 
     def _collect_observations_for_each_species(self, raw_obs_dict):
         species_info = defaultdict(lambda: {'obs': [], 'agents': [], 'locs': []})

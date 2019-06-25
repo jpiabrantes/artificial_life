@@ -4,7 +4,7 @@ import numpy as np
 import seaborn as sns
 
 
-path = 'replay/data/competitive.csv'
+path = 'replay/data/vdn_competitive.csv'
 df = pd.read_csv(path)
 
 df['DD'] = np.logical_and(df.compete_1 == True, df.compete_2 == True).astype(np.int)
@@ -65,8 +65,29 @@ for ax, df, df_name in zip([axs], dfs, df_names):
     ax.set_xlabel('Age of the first agent')
     ax.legend(loc='best')
 
+tdf = df.loc[df.same_family == True]
+tdf = df.loc[df.same_family == False]
 # bar plot
-masks = [df.age_1 > df.age_2, df.age_2 > df.age_1, df.age_1 >= 45, df.age_2 >= 45]
+
+masks = [tdf.age_1 > tdf.age_2, tdf.age_1 < tdf.age_2, tdf.age_1 >= 40, tdf.age_2 >= 40]
+data = []  # masks x features
+for mask in masks:
+    data.append([np.sum(tdf.loc[mask, f] == 1) for f in ('CD', 'CC', 'DC', 'DD')])
+
+fig, ax = plt.subplots()
+plots = []
+ind = np.arange(4)
+width = 0.1
+data = np.array(data)
+
+for i, feature in enumerate(data.T):
+    plots.append(ax.bar(ind + width * i, feature, width)[0])
+ax.set_xticks(ind + width*3/2)
+ax.set_xticklabels(('Age 1 > Age 2', 'Age 1 < Age 2', 'Age 1 > 45', 'Age 2 > 45'))
+
+ax.legend(plots, ('CD', 'CC', 'DC', 'DD'))
+
+
 
 
 fig, axs = plt.subplots(1, 1, sharey=True, sharex=True)

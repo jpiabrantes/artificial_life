@@ -105,7 +105,8 @@ elif exp_name == 'VDN':
 else:
     print('passing')
 
-
-ep_len, population_integral = rollout(env, exp_name, policies, species_indices, obs_filter)
-print('Episode length: ', ep_len)
-print('Population integral: ', population_integral)
+for i in range(50):
+    print(i)
+    ep_len, population_integral = rollout(env, exp_name, policies, species_indices, obs_filter)
+    print('Episode length: ', ep_len)
+    print('Population integral: ', population_integral)

@@ -6,8 +6,7 @@ import numpy as np
 
 from utils.filters import MeanStdFilter, apply_filters
 from utils.misc import agent_name_to_species_index_fn
-from pdb import set_trace as pdb
-
+from utils.buffers import EpStats
 
 @ray.remote(num_cpus=1)
 class Worker:
@@ -23,12 +22,12 @@ class Worker:
         else:
             self.filters = {}
         self.policies = [p_creator() for p_creator in policy_creators]
+        self.ep_stats = EpStats()
 
     def rollout(self, weights_ids, pop_indices, generation):
         for policy, weight in zip(self.policies, ray.get(weights_ids)):
             policy.load_flat_array(weight)
         mean_fitness = defaultdict(int)
-        mean_len = 0
         for n_rollout in range(self.n_rollouts):
             raw_obs_dict, done_dict = self.env.reset(pop_indices), {'__all__': False}
             ep_len = 0
@@ -66,14 +65,19 @@ class Worker:
 
                 raw_obs_dict = n_raw_obs_dict
                 ep_len += 1
+            stats = {'ep_len': ep_len}
+            stats.update(info_dict['__all__'])
+            self.ep_stats.add(stats)
 
-            if generation < 40:
+            if generation < 300:
                 for score, pop_index in zip(info_dict['founders_total_results'], pop_indices):
                     mean_fitness[pop_index] += score * 1/self.n_rollouts
             for score, pop_index in zip(info_dict['founders_results'], pop_indices):
                 mean_fitness[pop_index] += score * 1/self.n_rollouts
-            mean_len += ep_len * 1/self.n_rollouts
-        return mean_fitness, mean_len
+        return mean_fitness
+
+    def get_stats(self):
+        return self.ep_stats.get()
 
     def get_filters(self, flush_after=False):
         """Returns a snapshot of filters.

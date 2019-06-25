@@ -46,7 +46,7 @@ class CompetitiveScenarios:
     def save(self):
         cwd = os.path.dirname(os.path.abspath(__file__))
         results = pd.DataFrame(self.data, columns=columns)
-        path = os.path.join(cwd, 'data', 'competitive.csv')
+        path = os.path.join(cwd, 'data', 'vdn_competitive.csv')
         if os.path.isfile(path):
             results.to_csv(path, mode='a', header=False)
         else:
