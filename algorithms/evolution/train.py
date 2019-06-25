@@ -50,8 +50,8 @@ policy_creator = lambda: create_vision_and_fc_network(**policy_args)
 #     return DiscreteActor(inputs=input_layer, outputs=[out])
 
 
-def save_ep_stats(ep_stats, path):
-    df = pd.DataFrame(ep_stats)
+def save_ep_stats(ep_stats, generation, path):
+    df = pd.DataFrame(ep_stats, index=[generation])
     if os.path.isfile(path):
         df.to_csv(path, header=False, mode='a')
     else:
@@ -117,8 +117,7 @@ if __name__ == '__main__':
             i = i % n_workers
             worker = workers[i]
             result_ids.append(worker.rollout.remote([solution_ids[j] for j in group], group, generation))
-        results = ray.get(result_ids)
-        returns = zip(results)
+        returns = ray.get(result_ids)
         negative_fitness_list = [np.zeros((popsize,), np.float32) for _ in range(n_agents)]
         for return_dict in returns:
             for k, v in return_dict.items():
@@ -130,7 +129,7 @@ if __name__ == '__main__':
         for es, solutions, negative_fitness in zip(es_list, solutions_list, negative_fitness_list):
             es.tell(solutions, negative_fitness)
 
-        ep_stats = [s.remote.get_stats() for s in workers]
+        ep_stats = [s.get_stats.remote() for s in workers]
         ep_stats = concatenate_ep_stats(ep_stats)
         ep_stats['time'] = time() - start_time
         ep_stats['episodes'] = episodes_per_gen*generation
@@ -146,7 +145,7 @@ if __name__ == '__main__':
             for k, v in ep_stats.items():
                 print(k, v)
 
-        save_ep_stats(ep_stats, os.path.join(checkpoint_path, 'ep_stats.csv'))
+        save_ep_stats(ep_stats, os.path.join(checkpoint_path, generation, 'ep_stats.csv'))
         if (generation % save_freq) == save_freq-1:
             with open(os.path.join(checkpoint_path, 'last_checkpoint.txt'), 'w') as f:
                 f.write('%d\n' % generation)
