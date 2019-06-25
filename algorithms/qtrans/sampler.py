@@ -13,6 +13,7 @@ from models.base import Qtran
 class Sampler:
     def __init__(self, env_creator, num_of_envs, num_of_steps_per_env, brain_kwargs):
         self.num_of_steps_per_env = num_of_steps_per_env
+        self.env_creator = env_creator
         self.envs = [env_creator() for _ in range(num_of_envs)]
         self.state = [{'raw_obs_dict': env.reset(), 'ep_len': 0, 'ep_rew': 0} for env in self.envs]
         # TODO: check random seed
@@ -20,17 +21,22 @@ class Sampler:
         self.qn = Qtran(**brain_kwargs)
         self.ep_stats = EpStats()
 
-    def rollout(self, weights, eps_dict):
+    def rollout(self, weights, eps_dict=None, training=True):
         qn = self.qn
         species_indices = list(weights.keys())
         species_buffers = {species_index: QTranReplayBuffer() for species_index in species_indices}
-        for env_i, env in enumerate(self.envs):
-            state = self.state[env_i]
-            raw_obs_dict, done_dict, ep_len, ep_rew = state['raw_obs_dict'], {'__all__': False}, state['ep_len'],\
-                                                      state['ep_rew']
-
+        envs = self.envs if training else [self.env_creator()]
+        num_of_steps = self.num_of_steps_per_env if training else envs[0].max_iters
+        eps_dict = defaultdict(float) if eps_dict is None else eps_dict
+        for env_i, env in enumerate(envs):
+            if training:
+                state = self.state[env_i]
+                raw_obs_dict, done_dict, ep_len, ep_rew = state['raw_obs_dict'], {'__all__': False}, state['ep_len'],\
+                                                          state['ep_rew']
+            else:
+                raw_obs_dict, done_dict, ep_len, ep_rew = env.reset(), {'__all__': False}, 0, 0
             species_info = None
-            for step in range(self.num_of_steps_per_env):
+            for step in range(num_of_steps):
                 state_action_species = np.ones((env.n_rows, env.n_cols, len(env.State) + 2), np.float32) * -1
                 state_action_species[:, :, :-2] = raw_obs_dict['state']
 
@@ -58,34 +64,36 @@ class Sampler:
                                        ('reward', 'done')):
                     assert set(action_dict.keys()) == set_, "You should have a {} for each agent that sent an action." \
                                                             "\n{} vs {}".format(label, set_, action_dict.keys())
+                if training:
+                    # Save the experience in each species episode buffer
+                    species_indices = list(species_info.keys())
+                    step_buffer = defaultdict(list)
+                    for species_index, info in species_info.items():
+                        for agent_name, obs, action in zip(info['agents'], info['obs'], info['actions']):
+                            rew, done = reward_dict[agent_name], done_dict[agent_name]
+                            step_buffer[species_index].append((obs, action, rew, done))
 
-                # Save the experience in each species episode buffer
-                species_indices = list(species_info.keys())
-                step_buffer = defaultdict(list)
-                for species_index, info in species_info.items():
-                    for agent_name, obs, action in zip(info['agents'], info['obs'], info['actions']):
-                        rew, done = reward_dict[agent_name], done_dict[agent_name]
-                        step_buffer[species_index].append((obs, action, rew, done))
-
-                # compute n_state_action_star
-                n_state_action = np.ones((env.n_rows, env.n_cols, len(env.State) + 1), np.float32) * -1
-                n_state_action[:, :, :-1] = n_raw_obs_dict['state']
-                # collect n_observations for each species
-                species_info = self._collect_observations_for_each_species(n_raw_obs_dict)
-                # compute n_actions_star of each species
-                for species_index, info in species_info.items():
-                    qn.set_weights(weights[species_index])
-                    observation_arr = np.stack(info['obs'])
-                    actions = qn.get_actions(observation_arr, 0)
-                    for agent_name, action in zip(info['agents'], actions):
-                        agent = env.agents[agent_name]
-                        row, col = agent.row, agent.col
-                        n_state_action[row, col, -1] = action
-                for species_index in species_indices:
-                    n_sta_act = n_state_action.copy()
-                    n_sta_act[:, :, env.State.DNA] = n_sta_act[:, :, env.State.DNA] == species_index
-                    species_buffers[species_index].add_step(step_buffer[species_index], state_action_species,
-                                                            species_info[species_index]['locs'], n_sta_act)
+                    # compute n_state_action_star
+                    n_state_action = np.ones((env.n_rows, env.n_cols, len(env.State) + 1), np.float32) * -1
+                    n_state_action[:, :, :-1] = n_raw_obs_dict['state']
+                    # collect n_observations for each species
+                    species_info = self._collect_observations_for_each_species(n_raw_obs_dict)
+                    # compute n_actions_star of each species
+                    for species_index, info in species_info.items():
+                        qn.set_weights(weights[species_index])
+                        observation_arr = np.stack(info['obs'])
+                        actions = qn.get_actions(observation_arr, 0)
+                        for agent_name, action in zip(info['agents'], actions):
+                            agent = env.agents[agent_name]
+                            row, col = agent.row, agent.col
+                            n_state_action[row, col, -1] = action
+                    for species_index in species_indices:
+                        n_sta_act = n_state_action.copy()
+                        n_sta_act[:, :, env.State.DNA] = n_sta_act[:, :, env.State.DNA] == species_index
+                        species_buffers[species_index].add_step(step_buffer[species_index], state_action_species,
+                                                                species_info[species_index]['locs'], n_sta_act)
+                else:
+                    species_info = None
 
                 raw_obs_dict = n_raw_obs_dict
                 ep_rew += sum(reward_dict.values())
@@ -94,10 +102,16 @@ class Sampler:
                     stats = {'ep_len': ep_len, 'ep_rew': ep_rew}
                     stats.update(info_dict['__all__'])
                     self.ep_stats.add(stats)
-                    raw_obs_dict, ep_len, ep_rew = env.reset(), 0, 0
-
-            self.state[env_i] = {'raw_obs_dict': raw_obs_dict, 'ep_len': ep_len, 'ep_rew': ep_rew}
-        return species_buffers
+                    if training:
+                        raw_obs_dict, ep_len, ep_rew = env.reset(), 0, 0
+                    else:
+                        break
+            if training:
+                self.state[env_i] = {'raw_obs_dict': raw_obs_dict, 'ep_len': ep_len, 'ep_rew': ep_rew}
+        if training:
+            return species_buffers
+        else:
+            self.get_ep_stats()
 
     def _collect_observations_for_each_species(self, raw_obs_dict):
         species_info = defaultdict(lambda: {'obs': [], 'agents': [], 'locs': []})

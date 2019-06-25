@@ -41,7 +41,7 @@ class Trainer:
         for i, (step, state_action_species, loc, n_state_action_star) in enumerate(zip(steps, sta_act_spe, locs,
                                                                                        n_sta_act_star)):
             # step: list of experiences of size #n_agents
-            step = np.stack(step)  # n_agents, 5
+            step = np.stack(step)  # n_agents, 4
             obs, act, rew, done = [np.array(x.tolist(), t) for x, t in zip(step.T, (np.float32, np.int32, np.float32,
                                                                                     np.bool))]
             assert len(np.unique(rew)) == 1

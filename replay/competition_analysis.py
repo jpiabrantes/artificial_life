@@ -65,6 +65,9 @@ for ax, df, df_name in zip([axs], dfs, df_names):
     ax.set_xlabel('Age of the first agent')
     ax.legend(loc='best')
 
+# bar plot
+masks = [df.age_1 > df.age_2, df.age_2 > df.age_1, df.age_1 >= 45, df.age_2 >= 45]
+
 
 fig, axs = plt.subplots(1, 1, sharey=True, sharex=True)
 for ax, df, df_name in zip([axs], dfs, df_names):

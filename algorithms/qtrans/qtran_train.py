@@ -20,8 +20,9 @@ Weights = namedtuple('Weights', ('main', 'target'))
 
 class QtranTrainer:
     def __init__(self, env_creator,  brain_kwargs, population_size, gamma=0.99, start_eps=1, end_eps=0.1,
-                 annealing_steps=50000, tau=0.001, n_trainers=5, n_samplers=20, num_envs_per_sampler=20,
-                 num_of_steps_per_sample=1, learning_rate=0.0005, opt_coeff=1, nopt_coeff=1):
+                 annealing_steps=200000, tau=0.001, n_trainers=5, n_samplers=20, num_envs_per_sampler=20,
+                 num_of_steps_per_sample=1, learning_rate=0.0005, opt_coeff=1, nopt_coeff=1, test_freq=200,
+                 save_freq=1):
         env = env_creator()
         self.env = env
 
@@ -52,6 +53,8 @@ class QtranTrainer:
 
         train_summary_writer = tf.summary.create_file_writer(tensorboard_folder)
         episodes = 0
+        last_test = episodes
+        last_save = episodes
         total_steps = 0
         while True:
             total_steps += 1
@@ -71,7 +74,7 @@ class QtranTrainer:
                     dict_ = species_dict[species_index]
                     dict_['steps'] += len(buffer.step_buf)
                     if dict_['steps'] > annealing_steps:
-                        coeff = (dict_['steps']-annealing_steps)/annealing_steps
+                        coeff = (dict_['steps']-annealing_steps)/(annealing_steps*10)
                         dict_['eps'] = max(coeff * 0.01 + (1 - coeff) * end_eps, 0.01)
                     else:
                         coeff = dict_['steps']/annealing_steps
@@ -85,6 +88,9 @@ class QtranTrainer:
                     i = (i + 1) % len(trainers)
                 training_results = ray.get(training_results)
 
+            saving = (episodes - last_save) >= save_freq
+            if saving:
+                last_save = episodes
             training_losses = []
             with Timer() as saving_time:
                 for species_index, (main_weights, optimiser_weights, loss) in zip(training_species_idx, training_results):
@@ -96,9 +102,10 @@ class QtranTrainer:
                     for mw, tw in zip(brain.Q.get_weights(), self.weights[species_index].target):
                         target_w.append(tau * mw + (1-tau)*tw)
                     self.weights[species_index] = Weights(main_weights, target_w)
-                    species_folder = os.path.join(exp_folder, str(species_index))
-                    with open(os.path.join(species_folder, 'weights.pkl'), 'wb') as f:
-                        pickle.dump(self.weights[species_index], f)
+                    if saving:
+                        species_folder = os.path.join(exp_folder, str(species_index))
+                        with open(os.path.join(species_folder, 'weights.pkl'), 'wb') as f:
+                            pickle.dump(self.weights[species_index], f)
 
             if not (total_steps % 10):
                 with open(os.path.join(exp_folder, 'variables.pkl'), 'wb') as f:
@@ -113,6 +120,15 @@ class QtranTrainer:
             if ep_metrics['EpisodesThisIter']:
                 metrics.update(ep_metrics)
                 episodes += ep_metrics['EpisodesThisIter']
+
+            if (episodes - last_test) >= test_freq:
+                last_test = episodes
+                filter_manager.synchronize(self.actor_filters, samplers)
+                weights_id = ray.put({species_index: w.main for species_index, w in self.weights.items()})
+                ep_stats = ray.get([s.rollout.remote(weights_id, training=False) for s in samplers])
+                test_metrics = self._concatenate_ep_stats(ep_stats)
+                test_metrics = {'test_%s' % k: v for k, v in test_metrics.items()}
+                metrics.update(test_metrics)
 
             mean_eps, mean_steps = [], []
             for species_index, dict_ in species_dict.items():

@@ -34,7 +34,7 @@ class VDNTrainer:
     def __init__(self, env_creator,  brain_creator, population_size, gamma=0.99,
                  start_eps=1, end_eps=0.1, annealing_steps=50000, tau=0.001, n_trainers=2,
                  n_samplers=2, num_envs_per_sampler=5, num_of_steps_per_sample=1, learning_rate=0.0005, load=False,
-                 test_freq=20):
+                 test_freq=20, save_freq=1):
         env = env_creator()
         self.env = env
 
@@ -62,6 +62,7 @@ class VDNTrainer:
             total_steps, episodes = 0, 0
 
         last_test = episodes
+        last_save = episodes
         filter_manager = FilterManager()
         if load:
             species_dict = {species_index: {'steps': annealing_steps*20, 'eps': start_eps, 'optimiser_weights': None}
@@ -104,6 +105,9 @@ class VDNTrainer:
                     i = (i + 1) % len(trainers)
                 training_results = ray.get(training_results)
 
+            saving = (episodes - last_save) >= save_freq
+            if saving:
+                last_save = episodes
             training_losses = []
             with Timer() as saving_time:
                 for species_index, (main_weights, optimiser_weights, loss) in zip(training_species_idx, training_results):
@@ -114,10 +118,10 @@ class VDNTrainer:
                     for mw, tw in zip(main_weights, self.weights[species_index].target):
                         target_w.append(tau * mw + (1-tau)*tw)
                     self.weights[species_index] = Weights(main_weights, target_w)
-                    species_folder = os.path.join(exp_folder, str(species_index))
-                    with open(os.path.join(species_folder, 'weights.pkl'), 'wb') as f:
-                        pickle.dump(self.weights[species_index], f)
-
+                    if saving:
+                        species_folder = os.path.join(exp_folder, str(species_index))
+                        with open(os.path.join(species_folder, 'weights.pkl'), 'wb') as f:
+                            pickle.dump(self.weights[species_index], f)
             if not (total_steps % 10):
                 with open(os.path.join(exp_folder, 'variables.pkl'), 'wb') as f:
                     pickle.dump((self.filters, total_steps, episodes), f)
