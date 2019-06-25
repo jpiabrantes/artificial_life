@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from algorithms.evolution.worker import Worker
 from algorithms.evolution.es import CMAES
-from models.base import DiscreteActor
+from models.base import create_vision_and_fc_network
 from algorithms.evolution.helpers import load_variables
 from utils.filters import FilterManager, MeanStdFilter
 from utils.buffers import concatenate_ep_stats
@@ -26,18 +26,28 @@ if not eager:
 
 env_creator = lambda: DeadlyColony(env_default_config)
 env = env_creator()
-hidden_sizes = [512, 256, 128]
-num_outputs = env.action_space.n
-input_shape = env.observation_space.shape
 
+policy_args = {'conv_sizes': [(32, (3, 3), 1)],
+               'fc_sizes': [16],
+               'last_fc_sizes': [64, 32],
+               'conv_input_shape': env.actor_terrain_obs_shape,
+               'fc_input_length': np.prod(env.observation_space.shape) - np.prod(env.actor_terrain_obs_shape),
+               'num_outputs': env.action_space.n,
+               'obs_input_shape': env.observation_space.shape}
 
-def policy_creator():
-    input_layer = tf.keras.layers.Input(shape=input_shape)
-    out = input_layer
-    for h in hidden_sizes:
-        out = tf.keras.layers.Dense(h, activation='relu')(out)
-    out = tf.keras.layers.Dense(num_outputs, activation='linear')(out)
-    return DiscreteActor(inputs=input_layer, outputs=[out])
+policy_creator = lambda: create_vision_and_fc_network(**policy_args)
+# hidden_sizes = [512, 256, 128]
+# num_outputs = env.action_space.n
+# input_shape = env.observation_space.shape
+#
+#
+# def policy_creator():
+#     input_layer = tf.keras.layers.Input(shape=input_shape)
+#     out = input_layer
+#     for h in hidden_sizes:
+#         out = tf.keras.layers.Dense(h, activation='relu')(out)
+#     out = tf.keras.layers.Dense(num_outputs, activation='linear')(out)
+#     return DiscreteActor(inputs=input_layer, outputs=[out])
 
 
 def save_ep_stats(ep_stats, path):
