@@ -83,7 +83,7 @@ data = np.array(data)
 for i, feature in enumerate(data.T):
     plots.append(ax.bar(ind + width * i, feature, width)[0])
 ax.set_xticks(ind + width*3/2)
-ax.set_xticklabels(('Age 1 > Age 2', 'Age 1 < Age 2', 'Age 1 > 45', 'Age 2 > 45'))
+ax.set_xticklabels(('Age 1 > Age 2', 'Age 1 < Age 2', 'Age 1 > 40', 'Age 2 > 40'))
 
 ax.legend(plots, ('CD', 'CC', 'DC', 'DD'))
 

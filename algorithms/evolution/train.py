@@ -70,6 +70,7 @@ save_freq = 10
 n_workers = 40
 load = False
 assert popsize % n_agents == 0, 'population size must be a multiple of n_agents'
+episodes_per_gen = popsize * rollouts_per_group * n_groups_per_sample
 
 ray.init(local_mode=(n_workers == 1))
 start_time = time()
@@ -96,7 +97,6 @@ if __name__ == '__main__':
 
     for generation in tqdm(range(last_generation, last_generation+generations)):
         if not generation:
-            episodes_per_gen = popsize * rollouts_per_group * n_groups_per_sample
             print('Sampling %d episodes per generation!' % episodes_per_gen)
         filter_manager.synchronize(filters, workers)
         solutions_list = [es.ask() for es in es_list]
@@ -129,7 +129,7 @@ if __name__ == '__main__':
         for es, solutions, negative_fitness in zip(es_list, solutions_list, negative_fitness_list):
             es.tell(solutions, negative_fitness)
 
-        ep_stats = [s.get_stats.remote() for s in workers]
+        ep_stats = ray.get([s.get_stats.remote() for s in workers])
         ep_stats = concatenate_ep_stats(ep_stats)
         ep_stats['time'] = time() - start_time
         ep_stats['episodes'] = episodes_per_gen*generation
@@ -145,7 +145,7 @@ if __name__ == '__main__':
             for k, v in ep_stats.items():
                 print(k, v)
 
-        save_ep_stats(ep_stats, os.path.join(checkpoint_path, generation, 'ep_stats.csv'))
+        save_ep_stats(ep_stats, generation, os.path.join(checkpoint_path, 'ep_stats.csv'))
         if (generation % save_freq) == save_freq-1:
             with open(os.path.join(checkpoint_path, 'last_checkpoint.txt'), 'w') as f:
                 f.write('%d\n' % generation)

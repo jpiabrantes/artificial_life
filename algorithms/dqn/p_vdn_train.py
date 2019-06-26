@@ -94,7 +94,7 @@ class VDNTrainer:
                     dict_ = species_dict[species_index]
                     dict_['steps'] += len(buffer.buffer)
                     if dict_['steps'] > annealing_steps:
-                        coeff = (dict_['steps']-annealing_steps)/(10*annealing_steps)
+                        coeff = (dict_['steps']-annealing_steps)/(100*annealing_steps)
                         dict_['eps'] = max(coeff * 0.01 + (1 - coeff) * end_eps, 0.01)
                     else:
                         coeff = dict_['steps']/annealing_steps
@@ -191,7 +191,7 @@ class VDNTrainer:
 
 
 if __name__ == '__main__':
-    from models.base import VDNMixer
+    from models.base import VDNMixer, VDNMixer_2
     from envs.deadly_colony.deadly_colony import DeadlyColony
     from envs.deadly_colony.env_config import env_default_config
 
@@ -199,10 +199,19 @@ if __name__ == '__main__':
     config['greedy_reward'] = True
     env_creator = lambda: DeadlyColony(config)
     env = env_creator()
-    q_kwargs = {'hidden_units': [512, 256, 128],
-                'observation_space': env.observation_space,
-                'action_space': env.action_space}
-    brain_creator = lambda: VDNMixer(**q_kwargs)
+    q_kwargs = {'conv_sizes': [(32, (3, 3), 1)],
+                'fc_sizes': [16],
+                'last_fc_sizes': [64, 32],
+                'conv_input_shape': env.actor_terrain_obs_shape,
+                'fc_input_length': np.prod(env.observation_space.shape) - np.prod(env.actor_terrain_obs_shape),
+                'action_space': env.action_space,
+                'obs_input_shape': env.observation_space.shape}
+    brain_creator = lambda: VDNMixer_2(**q_kwargs)
 
-    ray.init(local_mode=False)
+    # q_kwargs = {'hidden_units': [512, 256, 128],
+    #             'observation_space': env.observation_space,
+    #             'action_space': env.action_space}
+    # brain_creator = lambda: VDNMixer(**q_kwargs)
+
+    ray.init(local_mode=True)
     trainer = VDNTrainer(env_creator, brain_creator, population_size=5)

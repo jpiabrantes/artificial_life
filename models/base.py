@@ -149,6 +149,52 @@ class Qtran(kr.Model):
         return actions
 
 
+class VDNMixer_2(kr.Model):
+    def __init__(self, obs_input_shape, conv_sizes, fc_sizes, last_fc_sizes, conv_input_shape, fc_input_length,
+                 action_space):
+        super().__init__('VDNMixer')
+        self.action_space = action_space
+        input_layer = kl.Input(shape=obs_input_shape)
+
+        width, height, depth = conv_input_shape
+        conv_input = tf.reshape(tf.slice(input_layer, (0, 0), (-1, height * width * depth)), [-1, height, width, depth])
+        for filters, kernel, stride in conv_sizes:
+            conv_input = kl.Conv2D(filters, kernel, stride, activation='relu')(conv_input)
+        flatten = kl.Flatten()(conv_input)
+        fc_input = tf.slice(input_layer, (0, height * width * depth), (-1, fc_input_length))
+        fc = MLP(fc_sizes, 0, (None, fc_input_length))(fc_input)
+        concat = kl.Concatenate(axis=-1)([flatten, fc])
+        out = MLP(last_fc_sizes, 0, (None, concat.shape[1]))(concat)
+        stream_adv, stream_val = tf.split(out, 2, axis=1)
+        advantage = kl.Dense(action_space.n, activation=None, use_bias=None)(stream_adv)
+        advantage = tf.subtract(advantage, tf.reduce_mean(advantage, axis=1, keepdims=True))
+        value = kl.Dense(1, activation=None, use_bias=None)(stream_val)
+        Qout = value + advantage
+        self.q = kr.Model(inputs=input_layer, outputs=[Qout])
+
+    def __call__(self, list_of_obs, list_of_act, training=True):
+        """
+        :param list_of_obs_act: list of n arrays with dimensions [None, obs_dim+1]
+        :param training: (bool)
+        :return: n
+        """
+        result = []
+        for obs, act in zip(list_of_obs, list_of_act):
+            # n_agents, obs_shape
+            qout = self.q(obs)
+            result.append(tf.reduce_sum(tf.one_hot(tf.cast(act, tf.int32), self.action_space.n)*qout))
+        return tf.stack(result)
+
+    def get_actions(self, obs, eps):
+        batch_size = len(obs)
+        actions = np.zeros((batch_size,), np.int32)
+        random_mask = np.random.rand(batch_size) < eps
+        actions[random_mask] = np.random.randint(0, self.action_space.n, size=sum(random_mask))
+        non_random_mask = np.logical_not(random_mask)
+        actions[non_random_mask] = tf.argmax(self.q(obs[non_random_mask]), axis=1)
+        return actions
+
+
 class VDNMixer(kr.Model):
     def __init__(self, hidden_units, observation_space, action_space):
         super().__init__('VDNMixer')

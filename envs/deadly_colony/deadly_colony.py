@@ -328,7 +328,7 @@ class DeadlyColony:
             if self.update_stats:
                 agent.family_size = family_size
             n_entities = len(self.agents)
-            fc_obs = np.array((family_size, agent.row, agent.col, n_entities))
+            fc_obs = np.array((family_size, agent.row, agent.col, n_entities), np.float32)
             obs_dict[key] = np.hstack((obs.ravel(), fc_obs))
         return obs_dict
 
