@@ -12,5 +12,5 @@ def load_variables(env, generation=None):
     else:
         last_generation = generation
     with open(os.path.join(checkpoint_path, str(last_generation) + '_variables.pkl'), 'rb') as f:
-        mu0, stds, horizons_list, returns_list, filters = pickle.load(f)
+        mu0, stds, filters = pickle.load(f)
     return last_generation, mu0, stds, filters

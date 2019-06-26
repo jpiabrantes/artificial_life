@@ -4,50 +4,19 @@ import numpy as np
 import seaborn as sns
 
 
-path = 'replay/data/vdn_competitive.csv'
-df = pd.read_csv(path)
-
-df['DD'] = np.logical_and(df.compete_1 == True, df.compete_2 == True).astype(np.int)
-df['CC'] = np.logical_and(df.compete_1 == False, df.compete_2 == False).astype(np.int)
-df['CD'] = np.logical_and(df.compete_1 == False, df.compete_2 == True).astype(np.int)#np.logical_not(np.logical_or(df['CC'], df['DD'])).astype(np.int)
-df['DC'] = np.logical_and(df.compete_1 == True, df.compete_2 == False).astype(np.int)
-
-df['same_family'] = (df.dna_1 == df.dna_2)
-same_df = df.loc[df.same_family == True].copy()
-same_df['delta age'] = same_df.age_1 - same_df.age_2
-same_df['delta sugar'] = same_df.sugar_1 - same_df.sugar_2
-same_df['delta health'] = same_df.health_1 - same_df.health_2
-same_df['old_1'] = (same_df.age_1 >= 45).astype(np.int)
-same_df['old_2'] = (same_df.age_2 >= 45).astype(np.int)
-
-features = ['delta age', 'delta sugar', 'delta health', 'old_1', 'old_2']
-
-survive_mask = same_df.species_index_1 < 3
-legacy_mask = same_df.species_index_1 > 5
-family_mask = np.logical_not(np.logical_or(survive_mask, legacy_mask))
-
-label = ['CD']
-tdf = same_df.loc[survive_mask, features+label]
-# sns.pairplot(tdf)
-# corr = tdf.corr()
-# sns.heatmap(corr, xticklabels=corr.columns, yticklabels=corr.columns, cmap=sns.diverging_palette(220, 10, as_cmap=True))
+def load_and_pre_process(path):
+    df = pd.read_csv(path)
+    df['DD'] = np.logical_and(df.compete_1 == True, df.compete_2 == True).astype(np.int)
+    df['CC'] = np.logical_and(df.compete_1 == False, df.compete_2 == False).astype(np.int)
+    df['CD'] = np.logical_and(df.compete_1 == False, df.compete_2 == True).astype(np.int)
+    df['DC'] = np.logical_and(df.compete_1 == True, df.compete_2 == False).astype(np.int)
+    df['same_family'] = (df.dna_1 == df.dna_2)
+    return df
 
 
-def plot_conditional(dfs, df_names, label, value, feature, range):
-    for df, df_name in zip(dfs, df_names):
-        results = np.zeros(len(range))
-        for i, x in enumerate(range):
-            results[i] = ((df[label].values == value) & (df[feature].values == x)).sum()/(df[feature].values == x).sum()
-        plt.plot(range, results, label=df_name)
-    plt.ylabel('P(%s==%d, %s=x)' % (label, value, feature))
-    plt.xlabel(feature)
-    plt.legend(loc='best')
-    plt.show()
-
-
-df_names = ['VDN']
-dfs = [same_df]
-plot_conditional(dfs, df_names, 'compete_1', 1, 'delta age', np.arange(-50, 50, 1))
+df_names = ['vdn_competitive', 'es_competitive']
+paths = ['replay/data/%s.csv' % exp_name for exp_name in df_names]
+dfs = [load_and_pre_process(path) for path in paths]
 
 fig, axs = plt.subplots(1, 1, sharey=True, sharex=True)
 for ax, df, df_name in zip([axs], dfs, df_names):
@@ -65,6 +34,7 @@ for ax, df, df_name in zip([axs], dfs, df_names):
     ax.set_xlabel('Age of the first agent')
     ax.legend(loc='best')
 
+df = dfs[0]
 tdf = df.loc[df.same_family == True]
 tdf = df.loc[df.same_family == False]
 # bar plot
@@ -126,3 +96,39 @@ for ax, df, df_name in zip([axs], dfs, df_names):
 
 
 
+# df['same_family'] = (df.dna_1 == df.dna_2)
+# same_df = df.loc[df.same_family == True].copy()
+# same_df['delta age'] = same_df.age_1 - same_df.age_2
+# same_df['delta sugar'] = same_df.sugar_1 - same_df.sugar_2
+# same_df['delta health'] = same_df.health_1 - same_df.health_2
+# same_df['old_1'] = (same_df.age_1 >= 45).astype(np.int)
+# same_df['old_2'] = (same_df.age_2 >= 45).astype(np.int)
+#
+# features = ['delta age', 'delta sugar', 'delta health', 'old_1', 'old_2']
+#
+# survive_mask = same_df.species_index_1 < 3
+# legacy_mask = same_df.species_index_1 > 5
+# family_mask = np.logical_not(np.logical_or(survive_mask, legacy_mask))
+#
+# label = ['CD']
+# tdf = same_df.loc[survive_mask, features+label]
+# # sns.pairplot(tdf)
+# # corr = tdf.corr()
+# # sns.heatmap(corr, xticklabels=corr.columns, yticklabels=corr.columns, cmap=sns.diverging_palette(220, 10, as_cmap=True))
+#
+#
+# def plot_conditional(dfs, df_names, label, value, feature, range):
+#     for df, df_name in zip(dfs, df_names):
+#         results = np.zeros(len(range))
+#         for i, x in enumerate(range):
+#             results[i] = ((df[label].values == value) & (df[feature].values == x)).sum()/(df[feature].values == x).sum()
+#         plt.plot(range, results, label=df_name)
+#     plt.ylabel('P(%s==%d, %s=x)' % (label, value, feature))
+#     plt.xlabel(feature)
+#     plt.legend(loc='best')
+#     plt.show()
+#
+#
+# df_names = ['VDN']
+# dfs = [same_df]
+# plot_conditional(dfs, df_names, 'compete_1', 1, 'delta age', np.arange(-50, 50, 1))
