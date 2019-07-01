@@ -16,17 +16,18 @@ es_df.rename(columns={'Avg_babies_born': 'Babies Born', 'Avg_average_population'
 es_df.set_index('episodes', inplace=True)
 
 
-
-
-
 path = '/home/joao/github/artificial_life/algorithms/dqn/checkpoints/DeadlyColony-v0/basic/tensorboard/vdn_1561399561/events.out.tfevents.1561399561.ip-172-31-30-186.41430.786.v2'
 
+# features = ('Avg_average_population', 'Avg_babies_born', 'Avg_life_expectancy', 'Avg_n_attacks',
+#             'Avg_n_cannibalism_acts')
+features = ('test_Avg_average_population', 'test_Avg_babies_born', 'test_Avg_life_expectancy', 'test_Avg_n_attacks',
+            'test_Avg_n_cannibalism_acts', 'Episodes')
 
 wall_times = defaultdict(list)
 data = defaultdict(dict)
 for e in tf.compat.v1.train.summary_iterator(path):
     for v in e.summary.value:
-        if v.tag in ('test_Avg_babies_born', 'test_Avg_average_population', 'test_Avg_life_expectancy', 'Episodes'):
+        if v.tag in features:
             wall_times[e.step].append(e.wall_time)
             data[e.step][v.tag] = float(np.frombuffer(v.tensor.tensor_content, dtype=np.float32))
 
@@ -42,15 +43,53 @@ df.wall_time -= df.wall_time.iloc[0]
 df.wall_time /= 3600
 df.set_index('wall_time', inplace=True)
 df.set_index('Episodes', inplace=True)
-df.rename(columns={'test_Avg_babies_born': 'Babies Born', 'test_Avg_average_population': 'Average Population Size',
-                   'test_Avg_life_expectancy': 'Life Expectancy'}, inplace=True)
+df.rename(columns={'test_Avg_babies_born': 'Babies born', 'test_Avg_average_population': 'Average population size',
+                   'test_Avg_life_expectancy': 'Life expectancy',
+                   'test_Avg_n_cannibalism_acts': 'Intra-family attacks',
+                   'test_Avg_n_attacks': 'Inter-families attacks'}, inplace=True)
 
 
-df = es_df
-features = ['Average Population Size', 'Babies Born', 'Life Expectancy']
+#df = es_df
+features = ['Average population size', 'Babies born', 'Life expectancy', 'Intra-family attacks',
+            'Inter-families attacks']
 
-fig, axs = plt.subplots(1, 3)
-for ax, f in zip(axs, features):
+fig, axs = plt.subplots(1, 4, sharex=True)
+for ax, f, title in zip(axs, features[:-1], ('a)', 'b)', 'c)', 'd)')):
     ax.plot(df.index, df[f].values)
+    ax.set_title(title)
     ax.set_ylabel(f)
     ax.set_xlabel('episodes')
+    for x in [500, 5184, 10157]:
+        ax.axvline(x=x, color='k', ls='--', lw=1, alpha=0.5)
+
+
+prop_cycle = plt.rcParams['axes.prop_cycle']
+colors = prop_cycle.by_key()['color']
+x_pos = [0, 646, 5272, 10284, 18704]
+text_pos = [[(100, 7.13), (4452.42, 22.8647), (6996.21, 42.4397), (14203.4, 40.96)],
+            [(229, 63.01), (2147.98, 474.511), (7370.75, 743.9), (13288.2, 530.4)],
+            [(-150, 37.2), (1827.85, 26.8), (7593.56, 32.124), (14117.9, 46.0315)],
+            [(229.909, 90.87), (1823.07, 849.241), (7588.78, 853.818), (13885.5, 235.912)]]
+era = ['I', 'II', 'III', 'IV']
+fig, axs = plt.subplots(2, 2, sharex=True)
+axs = axs.ravel()
+for i, (ax, f, title) in enumerate(zip(axs, features[:-1], ('a)', 'b)', 'c)', 'd)'))):
+    for j in range(4):
+        tdf = df.loc[np.logical_and(x_pos[j] <= df.index, df.index <= x_pos[j + 1])]
+        ax.plot(tdf.index, tdf[f].values)
+        x, y = text_pos[i][j]
+        ax.text(x, y, era[j], fontsize=12, color=colors[j], horizontalalignment='left', verticalalignment='top',
+                fontname='Roman Font 7')
+
+    ax.set_title(title)
+    ax.set_ylabel(f)
+    ax.set_xlabel('episodes')
+
+fig, axs = plt.subplots(1, 2, sharex=True)
+for ax, f, title in zip(axs, features[-2:], ('a)', 'b)')):
+    ax.plot(df.index, df[f].values)
+    ax.set_title(title)
+    ax.set_ylabel(f)
+    ax.set_xlabel('episodes')
+
+

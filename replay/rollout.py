@@ -1,6 +1,7 @@
 import os
 import pickle
 from collections import defaultdict
+from time import time
 
 import pandas as pd
 import numpy as np
@@ -9,23 +10,38 @@ from models.base import VDNMixer
 from utils.misc import agent_name_to_species_index_fn
 
 this_folder = os.path.dirname(os.path.abspath(__file__))
-columns = ['age', 'health', 'sugar', 'family_size', 'attacked', 'kill', 'victim', 'cannibal_attack', 'cannibal_kill',
-           'cannibal_victim', 'species_index']
+columns = ['age', 'health', 'sugar', 'family_size', 'dna']
+enemy_columns = ['e_%s' % f for f in columns]
 
 
-def write_stats(agents, exp_name):
-    data = []
-    for agent in agents:
-        data.append([agent.__dict__[key] for key in columns])
-    df = pd.DataFrame(data, columns=columns)
-    path = os.path.join(this_folder, 'data', exp_name+'.csv')
-    if os.path.isfile(path):
-        df.to_csv(path, mode='a', header=False)
-    else:
-        df.to_csv(path)
+class StatsWriter:
+    def __init__(self):
+        self.last_data = {}
 
+    def add_stats(self, agents, exp_name, iter_):
+        rows = []
+        data = {}
+        for agent in agents:
+            data[agent.id] = [agent.__dict__[key] for key in columns]+[len(agents), iter_]
+            if agent.age:
+                row = self.last_data[agent.id][:]
+                if agent.attacked:
+                    e_data = self.last_data[agent.attacked][:-2]
+                else:
+                    e_data = [0]*len(columns)
+                row.extend(e_data)
+                rows.append(row)
+        self.last_data = data
+        if rows:
+            df = pd.DataFrame(rows, columns=columns+['population', 'iteration']+enemy_columns)
+            path = os.path.join(this_folder, 'data', exp_name+'.csv')
+            if os.path.isfile(path):
+                df.to_csv(path, mode='a', header=False)
+            else:
+                df.to_csv(path)
 
-def rollout(env, exp_name, policies, species_indices, obs_filter):
+iteration = 0
+def rollout(env, exp_name, policies, species_indices, obs_filter, save_dict=True):
     """
     Executes one rollout
 
@@ -36,9 +52,14 @@ def rollout(env, exp_name, policies, species_indices, obs_filter):
     :param species_indices: (list)
     :return: ep_len, population_integral
     """
+    global iteration
+    stats_writer = StatsWriter()
     dicts, population_integral, ep_len = [], 0, 0
     raw_obs_dict, done_dict = env.reset(species_indices), {'__all__': False}
+
     while not done_dict['__all__']:
+        stats_writer.add_stats(list(env.agents.values()), exp_name, iteration)
+        iteration += 1
         episode_dict = env.to_dict()
         del raw_obs_dict['state']
         # collect observations for each policy
@@ -77,13 +98,13 @@ def rollout(env, exp_name, policies, species_indices, obs_filter):
         population_integral += len(env.agents)
         # step
         n_raw_obs_dict, reward_dict, done_dict, info_dict = env.step(action_dict)
-        write_stats(list(env.agents.values()), exp_name)
 
         raw_obs_dict = n_raw_obs_dict
+
         ep_len += 1
         dicts.append(episode_dict)
-
-    with open(os.path.join('./dicts', '%s.pkl' % exp_name), 'wb') as f:
-        pickle.dump(dicts, f)
+    if save_dict:
+        with open(os.path.join('./dicts', '%s.pkl' % exp_name), 'wb') as f:
+            pickle.dump(dicts, f)
     env.competitive_scenario.save()
     return ep_len, population_integral

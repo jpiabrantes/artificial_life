@@ -24,7 +24,7 @@ Weights = namedtuple('Weights', ('main', 'target'))
 # env
 # env = BacteriaColony(env_default_config)
 config = env_default_config.copy()
-config['max_iters'] = 500
+config['max_iters'] = 750
 config['update_stats'] = True
 env = DeadlyColony(config)
 
@@ -51,7 +51,7 @@ ac_kwarg = {'actor_args': policy_args, 'critic_args': critic_args, 'observation_
 ac_creator = lambda: COMAActorCritic(**ac_kwarg)
 
 
-exp_name = 'EvolutionStrategies'
+exp_name = 'VDN'
 if exp_name == 'EvolutionStrategies':
     last_generation, mu0_list, stds_list, filters = load_variables(env)
     obs_filter = filters['MeanStdFilter']
@@ -105,8 +105,8 @@ elif exp_name == 'VDN':
 else:
     print('passing')
 
-for i in range(100):
+for i in range(90):
     print(i)
-    ep_len, population_integral = rollout(env, exp_name, policies, species_indices, obs_filter)
+    ep_len, population_integral = rollout(env, '%d_VDN_no' % i, policies, species_indices, obs_filter, save_dict=True)
     print('Episode length: ', ep_len)
     print('Population integral: ', population_integral)

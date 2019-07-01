@@ -7,7 +7,7 @@ from replay.panes import BacteriaAttributeRenderer, PolicyRenderer, GameRenderer
 
 
 HEIGHT = 1000
-WIDTH = 2000
+WIDTH = 1500
 
 
 class GlobalVariables:
@@ -54,21 +54,22 @@ class MainHolder:
         self._set_layout()
 
     def _set_layout(self):
-        game_screen = self.screen.subsurface(0, 0, self.width//2, self.width//2)
+        game_screen = self.screen.subsurface(0, 0, 1000, 1000)
         self.children.add(GameRenderer(game_screen, self.g_variables))
 
-        attr_screen = self.screen.subsurface(self.width // 2, 0, self.width//2, self.height//4)
-        self.children.add(BacteriaAttributeRenderer(attr_screen, self.g_variables))
+        # attr_screen = self.screen.subsurface(self.width // 2, 0, self.width//2, self.height//4)
+        # self.children.add(BacteriaAttributeRenderer(attr_screen, self.g_variables))
 
         # policy_screen = self.screen.subsurface(self.width // 2, self.height//4, self.width//2, self.height // 4)
         # self.children.add(PolicyRenderer(policy_screen, self.g_variables))
 
-        family_screen = self.screen.subsurface(self.width // 2, 2*self.height//4, self.width//2, 2*self.height // 4)
-        self.children.add(FamilyRenderer(family_screen, self.g_variables))
+        family_screen = self.screen.subsurface(1000, 0, 500, 1000)
+        self.children.add(FamilyRenderer(family_screen, self.g_variables, rotate=True))
 
     def render(self, dict_):
         for child in self.children:
             child.render(dict_)
+        # pygame.image.save(self.screen, 'images/%d.png' % self.g_variables.iter)
 
 
 class GameController:
@@ -142,7 +143,7 @@ if __name__ == '__main__':
     from envs.deadly_colony.env_config import env_default_config
 
     env = DeadlyColony(env_default_config)
-    expname = 'VDN'  # 'EvolutionStrategies' ,'MultiPPO'
+    expname = '0_VDN_gd'  # 'EvolutionStrategies' ,'MultiPPO'
 
     with open(os.path.join('./dicts', expname+'.pkl'), 'rb') as f:
         dicts = pickle.load(f)

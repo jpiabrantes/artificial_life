@@ -60,7 +60,7 @@ def save_ep_stats(ep_stats, generation, path):
 
 po = policy_creator()
 rollouts_per_group = 1
-popsize = 65
+popsize = 45
 n_groups_per_sample = 10
 n_agents = 5
 std0_list = [1.0]*n_agents
@@ -142,8 +142,8 @@ if __name__ == '__main__':
                                                                        -np.max(negative_fitness),
                                                                        -np.min(negative_fitness),
                                                                        np.std(negative_fitness)))
-            for k, v in ep_stats.items():
-                print(k, v)
+        for k, v in ep_stats.items():
+            print(k, v)
 
         save_ep_stats(ep_stats, generation, os.path.join(checkpoint_path, 'ep_stats.csv'))
         if (generation % save_freq) == save_freq-1:

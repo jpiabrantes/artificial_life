@@ -33,7 +33,7 @@ def load(env, exp_name):
 class VDNTrainer:
     def __init__(self, env_creator,  brain_creator, population_size, gamma=0.99,
                  start_eps=1, end_eps=0.1, annealing_steps=50000, tau=0.001, n_trainers=2,
-                 n_samplers=2, num_envs_per_sampler=5, num_of_steps_per_sample=1, learning_rate=0.0005, load=False,
+                 n_samplers=2, num_envs_per_sampler=5, num_of_steps_per_sample=1, learning_rate=0.0005, load=True,
                  test_freq=20, save_freq=1):
         env = env_creator()
         self.env = env
@@ -94,8 +94,8 @@ class VDNTrainer:
                     dict_ = species_dict[species_index]
                     dict_['steps'] += len(buffer.buffer)
                     if dict_['steps'] > annealing_steps:
-                        coeff = (dict_['steps']-annealing_steps)/(100*annealing_steps)
-                        dict_['eps'] = max(coeff * 0.01 + (1 - coeff) * end_eps, 0.01)
+                        # coeff = (dict_['steps']-annealing_steps)/(10*annealing_steps)
+                        dict_['eps'] = 0.1 #max(coeff * 0.01 + (1 - coeff) * end_eps, 0.01)
                     else:
                         coeff = dict_['steps']/annealing_steps
                         dict_['eps'] = max(coeff*end_eps+(1-coeff)*start_eps, end_eps)

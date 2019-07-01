@@ -469,21 +469,10 @@ class Agent:
         tile.add_agent(self)
 
         # for stats purposes
-        self.family_size = None
         self.attacked = None
-        self.kill = None
-        self.victim = None
-        self.cannibal_attack = None
-        self.cannibal_kill = None
-        self.cannibal_victim = None
 
     def falsify_stats(self):
-        self.attacked = False
-        self.kill = False
-        self.victim = False
-        self.cannibal_attack = False
-        self.cannibal_kill = False
-        self.cannibal_victim = False
+        self.attacked = None
 
     def to_dict(self):
         to_delete = {'bring_agent_to_world_fn', 'tile', 'competitive_scenario'}
@@ -514,6 +503,8 @@ class Agent:
         if self.alive and attack:
             enemy = self.tile.find_random_neighbour()
             if enemy is not None:
+                if self.dna == 1 and enemy.dna == 1:
+                    return None, 0
                 enemy.health -= 1
                 if enemy.health <= 0:
                     loot = enemy.sugar * 0.5
@@ -523,17 +514,12 @@ class Agent:
                     loot = 0
                 self.sugar += loot
                 # metrics
+                self.attacked = enemy.id
                 if enemy.dna == self.dna:
-                    self.cannibal_attack = True
-                    self.cannibal_kill = enemy.health <= 0
-                    enemy.cannibal_victim = True
                     self.attack_metrics['cannibalism_victim_age'].add_value(enemy.age)
                     self.attack_metrics['cannibal_age'].add_value(self.age)
                     self.attack_metrics['n_cannibalism_acts'] += 1
                 else:
-                    self.attacked = True
-                    self.kill = enemy.health <= 0
-                    enemy.victim = True
                     self.attack_metrics['attacker_age'].add_value(self.age)
                     self.attack_metrics['victim_age'].add_value(enemy.age)
                     self.attack_metrics['n_attacks'] += 1

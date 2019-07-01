@@ -24,7 +24,7 @@ class Sampler:
 
     def _randomise_episode_length(self, env):
         noise = int(self.max_iters*0.1)
-        env.max_iters += np.random.randint(-noise, noise + 1)
+        env.max_iters = self.max_iters + np.random.randint(-noise, noise + 1)
 
     def rollout(self, weights, eps_dict=None, training=True):
         qn = self.qn

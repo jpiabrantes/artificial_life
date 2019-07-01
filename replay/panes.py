@@ -9,6 +9,7 @@ pygame.font.init()
 TITLE_FONT = pygame.font.SysFont('ubuntu', size=18, bold=True)
 FONT = pygame.font.SysFont('ubuntu', size=16)
 DPI = 96
+plt.style.use('bmh')
 
 
 class GameRenderer:
@@ -132,7 +133,8 @@ class BacteriaAttributeRenderer:
 
 
 class FamilyRenderer:
-    def __init__(self, surface, g_struct):
+    def __init__(self, surface, g_struct, rotate=False):
+        self.rotate = rotate
         self.g_struct = g_struct
         self.margin = 10
         width, height = surface.get_size()
@@ -158,22 +160,38 @@ class FamilyRenderer:
     def render(self, iter_):
         self.surface.blit(self.background, (0, 0))
         if self.fig is None:
-            self.fig, self.axs = plt.subplots(figsize=(self.width // DPI, self.height // DPI))
+            if self.rotate:
+                self.fig, self.axs = plt.subplots(figsize=(self.height // DPI, self.width // DPI))
+            else:
+                self.fig, self.axs = plt.subplots(figsize=(self.width // DPI, self.height // DPI))
+
             self.axs.stackplot(np.arange(self.family_sizes.shape[1]), self.family_sizes, colors=self.colors)
             self.line = self.axs.axvline(x=iter_)
             self.axs.set_xlim([0, self.family_sizes.shape[1]])
-            self.axs.set_ylabel('Family sizes')
+            self.axs.set_ylabel('Family size', fontsize=18)
+            self.axs.set_xlabel('Iteration', fontsize=18, rotation=180*self.rotate)
+            if self.rotate:
+                plt.xticks(rotation=90)
+                plt.yticks(rotation=90)
         else:
             self.line.set_xdata(iter_)
         self.fig.tight_layout()
         self.fig.canvas.draw()
-        pygame.surfarray.blit_array(self.surface, fig2rgb(self.fig, self.width, self.height))
+        img = fig2rgb(self.fig, self.width, self.height, self.rotate)
+        pygame.surfarray.blit_array(self.surface, img)
 
 
-def fig2rgb(fig, width, height):
+def fig2rgb(fig, width, height, rotate):
     img1 = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-    img = Image.frombuffer('RGB', fig.canvas.get_width_height(), img1).resize((width, height), Image.BILINEAR)
-    img = np.array(img).transpose(1, 0, 2)
-    img = img[:, ::-1, :]
+    img = Image.frombuffer('RGB', fig.canvas.get_width_height(), img1)
+    if rotate:
+        img = img.resize((height, width), Image.BILINEAR)
+    else:
+        img = img.resize((width, height), Image.BILINEAR)
+    img = np.array(img)
+    if not rotate:
+        img = img.transpose(1, 0, 2)
+        img = img[:, ::-1, :]
+
     return img
 
