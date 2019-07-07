@@ -182,7 +182,7 @@ class VDNMixer_2(kr.Model):
         for obs, act in zip(list_of_obs, list_of_act):
             # n_agents, obs_shape
             qout = self.q(obs)
-            result.append(tf.reduce_sum(tf.one_hot(tf.cast(act, tf.int32), self.action_space.n)*qout))
+            result.append(tf.reduce_mean(tf.one_hot(tf.cast(act, tf.int32), self.action_space.n)*qout))
         return tf.stack(result)
 
     def get_actions(self, obs, eps):

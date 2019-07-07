@@ -31,7 +31,7 @@ class GameRenderer:
         img = self.env.render(state=state, tracking_dict=tracking_dict)
         img = np.array(Image.fromarray(img).resize((self.width, self.height), Image.NEAREST))
         pygame.surfarray.blit_array(self.surface, img.transpose(1, 0, 2))
-        # pygame.image.save(self.surface, 'images/%d.png' % iter_)
+        #pygame.image.save(self.surface, 'images/%d.png' % iter_)
 
 
 class PolicyRenderer:

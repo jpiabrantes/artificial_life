@@ -69,7 +69,7 @@ class MainHolder:
     def render(self, dict_):
         for child in self.children:
             child.render(dict_)
-        # pygame.image.save(self.screen, 'images/%d.png' % self.g_variables.iter)
+        pygame.image.save(self.screen, 'images/%d.png' % self.g_variables.iter)
 
 
 class GameController:
@@ -143,7 +143,7 @@ if __name__ == '__main__':
     from envs.deadly_colony.env_config import env_default_config
 
     env = DeadlyColony(env_default_config)
-    expname = '0_VDN_gd'  # 'EvolutionStrategies' ,'MultiPPO'
+    expname = 'VDN'  # 'EvolutionStrategies' ,'MultiPPO'
 
     with open(os.path.join('./dicts', expname+'.pkl'), 'rb') as f:
         dicts = pickle.load(f)

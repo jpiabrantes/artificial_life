@@ -11,12 +11,27 @@ plt.style.use('bmh')
 # read ES
 path = '~/github/artificial_life/algorithms/evolution/checkpoints/DeadlyColony-v0/ep_stats.csv'
 es_df = pd.read_csv(path)
-es_df.rename(columns={'Avg_babies_born': 'Babies Born', 'Avg_average_population': 'Average Population Size',
-                      'Avg_life_expectancy': 'Life Expectancy'}, inplace=True)
-es_df.set_index('episodes', inplace=True)
+es_df.rename(columns={'Avg_babies_born': 'Babies born', 'Avg_average_population': 'Average population size',
+                      'Avg_life_expectancy': 'Life expectancy', 'Avg_n_cannibalism_acts': 'Intra-family attacks'},
+             inplace=True)
+last_time = None
+time = np.zeros(len(es_df))
+
+# for i, t in enumerate(es_df.time):
+#     if last_time is None or last_time < t:
+#         time[i] = t
+#         last_time = t
+#     else:
+#         time[i] = last_time
+# es_df.time = time
+
+es_df.set_index('time', inplace=True)
 
 
 path = '/home/joao/github/artificial_life/algorithms/dqn/checkpoints/DeadlyColony-v0/basic/tensorboard/vdn_1561399561/events.out.tfevents.1561399561.ip-172-31-30-186.41430.786.v2'
+path = '/home/joao/github/artificial_life/algorithms/dqn/checkpoints/DeadlyColony-v0/basic/tensorboard/vdn_1561996915/events.out.tfevents.1561996915.ip-172-31-30-186.21669.5.v2'
+path = '/home/joao/github/artificial_life/algorithms/dqn/checkpoints_old/checkpoints_conv/DeadlyColony-v0/basic/tensorboard/vdn_1561541301/events.out.tfevents.1561541302.ip-172-31-30-186.47311.1251.v2'
+
 
 # features = ('Avg_average_population', 'Avg_babies_born', 'Avg_life_expectancy', 'Avg_n_attacks',
 #             'Avg_n_cannibalism_acts')
@@ -42,16 +57,26 @@ df.drop(df.index[df.test_Avg_average_population.isnull()], inplace=True)
 df.wall_time -= df.wall_time.iloc[0]
 df.wall_time /= 3600
 df.set_index('wall_time', inplace=True)
-df.set_index('Episodes', inplace=True)
+# df.set_index('Episodes', inplace=True)
 df.rename(columns={'test_Avg_babies_born': 'Babies born', 'test_Avg_average_population': 'Average population size',
                    'test_Avg_life_expectancy': 'Life expectancy',
                    'test_Avg_n_cannibalism_acts': 'Intra-family attacks',
                    'test_Avg_n_attacks': 'Inter-families attacks'}, inplace=True)
 
-
-#df = es_df
 features = ['Average population size', 'Babies born', 'Life expectancy', 'Intra-family attacks',
             'Inter-families attacks']
+fig, axs = plt.subplots(2, 2, sharex=True)
+axs = axs.ravel()
+for i, (ax, f, title) in enumerate(zip(axs, features[:-1], ('a)', 'b)', 'c)', 'd)'))):
+    ax.plot(df.index, df[f].values, label='RL')
+    ax.plot(es_df.index/3600, es_df[f].values, label='ES')
+    ax.set_title(title)
+    ax.set_ylabel(f)
+    ax.set_xlabel('episodes')
+
+
+df = es_df
+
 
 fig, axs = plt.subplots(1, 4, sharex=True)
 for ax, f, title in zip(axs, features[:-1], ('a)', 'b)', 'c)', 'd)')):
@@ -65,7 +90,7 @@ for ax, f, title in zip(axs, features[:-1], ('a)', 'b)', 'c)', 'd)')):
 
 prop_cycle = plt.rcParams['axes.prop_cycle']
 colors = prop_cycle.by_key()['color']
-x_pos = [0, 646, 5272, 10284, 18704]
+x_pos = [0, 646, 5272, 10284, 52971]
 text_pos = [[(100, 7.13), (4452.42, 22.8647), (6996.21, 42.4397), (14203.4, 40.96)],
             [(229, 63.01), (2147.98, 474.511), (7370.75, 743.9), (13288.2, 530.4)],
             [(-150, 37.2), (1827.85, 26.8), (7593.56, 32.124), (14117.9, 46.0315)],
@@ -74,18 +99,18 @@ era = ['I', 'II', 'III', 'IV']
 fig, axs = plt.subplots(2, 2, sharex=True)
 axs = axs.ravel()
 for i, (ax, f, title) in enumerate(zip(axs, features[:-1], ('a)', 'b)', 'c)', 'd)'))):
-    for j in range(4):
+    for j in range(1):
         tdf = df.loc[np.logical_and(x_pos[j] <= df.index, df.index <= x_pos[j + 1])]
-        ax.plot(tdf.index, tdf[f].values)
+        ax.plot(df.index, df[f].values)
         x, y = text_pos[i][j]
         ax.text(x, y, era[j], fontsize=12, color=colors[j], horizontalalignment='left', verticalalignment='top',
-                fontname='Roman Font 7')
+                 fontname='Roman Font 7')
 
     ax.set_title(title)
     ax.set_ylabel(f)
     ax.set_xlabel('episodes')
 
-fig, axs = plt.subplots(1, 2, sharex=True)
+fig, axs = plt.subplots(1, 2, sharex=True, sharey=True)
 for ax, f, title in zip(axs, features[-2:], ('a)', 'b)')):
     ax.plot(df.index, df[f].values)
     ax.set_title(title)

@@ -53,11 +53,19 @@ def rollout(env, exp_name, policies, species_indices, obs_filter, save_dict=True
     :return: ep_len, population_integral
     """
     global iteration
+    allele_counts = np.zeros((5, env.max_iters))
     stats_writer = StatsWriter()
     dicts, population_integral, ep_len = [], 0, 0
     raw_obs_dict, done_dict = env.reset(species_indices), {'__all__': False}
-
+    iter_ = 0
     while not done_dict['__all__']:
+        state = raw_obs_dict['state']
+        dna = state[:, :, env.State.DNA]
+        dna = dna[dna != 0]
+        unique_alleles, counts = np.unique(dna, return_counts=True, axis=0)
+        for gene, count in zip(unique_alleles, counts):
+            allele_counts[int(gene)-1, iter_] = count
+        iter_ += 1
         stats_writer.add_stats(list(env.agents.values()), exp_name, iteration)
         iteration += 1
         episode_dict = env.to_dict()
@@ -107,4 +115,4 @@ def rollout(env, exp_name, policies, species_indices, obs_filter, save_dict=True
         with open(os.path.join('./dicts', '%s.pkl' % exp_name), 'wb') as f:
             pickle.dump(dicts, f)
     env.competitive_scenario.save()
-    return ep_len, population_integral
+    return ep_len, population_integral, allele_counts

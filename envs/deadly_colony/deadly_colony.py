@@ -503,8 +503,8 @@ class Agent:
         if self.alive and attack:
             enemy = self.tile.find_random_neighbour()
             if enemy is not None:
-                if self.dna == 1 and enemy.dna == 1:
-                    return None, 0
+                # if self.dna == 1 and enemy.dna == 1:
+                #     return None, 0
                 enemy.health -= 1
                 if enemy.health <= 0:
                     loot = enemy.sugar * 0.5

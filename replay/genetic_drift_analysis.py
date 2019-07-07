@@ -9,8 +9,8 @@ from envs.deadly_colony.env_config import env_default_config
 env = DeadlyColony(env_default_config)
 plt.style.use('bmh')
 
-ep_len = 750
-n_dicts = 89
+ep_len = 100
+n_dicts = 300
 path = '/home/joao/github/artificial_life/replay/dicts/'
 entropy = np.empty((2, n_dicts, ep_len))
 births = np.zeros((2, n_dicts, ep_len))
@@ -67,15 +67,33 @@ for i in range(n_dicts):
         n_death_rate[j, i, :] = scipy.signal.convolve(death_rate[j, i, :], np.ones((window_size,)) * 1 / window_size, 'valid')
         n_birth_rate[j, i, :] = scipy.signal.convolve(birth_rate[j, i, :], np.ones((window_size,)) * 1 / window_size, 'valid')
 
+
+with open('VDN.pkl', 'rb') as f:
+    alleles_counts = pickle.load(f)
+probs = alleles_counts/np.sum(alleles_counts, axis=1)[:, None, :]
+entropy = probs*np.log(probs)
+entropy[np.isnan(entropy)] = 0
+entropy_ks = -entropy.sum(axis=1)
+
+with open('VDN_gd.pkl', 'rb') as f:
+    alleles_counts = pickle.load(f)
+probs = alleles_counts/np.sum(alleles_counts, axis=1)[:, None, :]
+entropy = probs*np.log(probs)
+entropy[np.isnan(entropy)] = 0
+entropy_gd = -entropy.sum(axis=1)
+
+entropy_ks = entropy[1, :, :]
+entropy_gd = entropy[0, :, :]
 plt.figure()
-
-
-x = np.arange(ep_len)
-y1, y2 = mean_confidence_interval(entropy[1, :, :])
+x = np.arange(750)
+y1, y2 = mean_confidence_interval(entropy_ks)
 y2 = np.where(y1 == y2, y2+1e-3, y2)
 plt.fill_between(x, y1=y1, y2=y2, label='Kinship detection', alpha=0.5)
-y1, y2 = mean_confidence_interval(entropy[0, :, :])
+plt.plot(x, np.mean(entropy_ks, axis=0))
+
+y1, y2 = mean_confidence_interval(entropy_gd)
 y2 = np.where(y1 == y2, y2+1e-3, y2)
+plt.plot(x, np.mean(entropy_gd, axis=0))
 plt.fill_between(x, y1=y1, y2=y2, label='No kinship detection', alpha=0.5)
 plt.xlabel('iteration')
 plt.ylabel('Entropy')
@@ -85,42 +103,50 @@ plt.show()
 
 fig, axs = plt.subplots(1, 3, sharex=False, sharey=False)
 ax = axs[0]
-x = np.arange(window_size//2, window_size//2+ep_len-window_size+1)
-y1, y2 = mean_confidence_interval(n_death_rate[1, :, :])
+x = np.arange(ep_len)
+y1, y2 = mean_confidence_interval(deaths[1, :, :])
 y2 = np.where(y1 == y2, y2+1e-3, y2)
+ax.plot(x, deaths[1, :, :].mean(axis=0))
 ax.fill_between(x, y1=y1, y2=y2, label='Kinship detection', alpha=0.5)
-y1, y2 = mean_confidence_interval(n_death_rate[0, :, :])
+y1, y2 = mean_confidence_interval(deaths[0, :, :])
 y2 = np.where(y1 == y2, y2+1e-3, y2)
+ax.plot(x, deaths[0, :, :].mean(axis=0))
 ax.fill_between(x, y1=y1, y2=y2, label='No kinship detection', alpha=0.5)
-ax.legend(loc='lower left')
+# ax.legend(loc='lower left')
 ax.set_xlabel('iteration')
-ax.set_ylabel('Smoothed death rate [deaths per iter]')
-ax.set_ylim([0.8, 1.06])
+ax.set_ylabel('Cumulative deaths')
+ax.set_xlim([0, 100])
+# ax.set_ylim([0.8, 1.06])
 
 ax = axs[1]
-y1, y2 = mean_confidence_interval(n_birth_rate[1, :, :])
+y1, y2 = mean_confidence_interval(births[1, :, :])
 y2 = np.where(y1 == y2, y2+1e-3, y2)
+ax.plot(x, births[1, :, :].mean(axis=0))
 ax.fill_between(x, y1=y1, y2=y2, label='Kinship detection', alpha=0.5)
-y1, y2 = mean_confidence_interval(n_birth_rate[0, :, :])
+y1, y2 = mean_confidence_interval(births[0, :, :])
 y2 = np.where(y1 == y2, y2+1e-3, y2)
+ax.plot(x, births[0, :, :].mean(axis=0))
 ax.fill_between(x, y1=y1, y2=y2, label='No kinship detection', alpha=0.5)
-ax.legend(loc='lower left')
+# ax.legend(loc='lower left')
 ax.set_xlabel('iteration')
-ax.set_ylabel('Smoothed birth rate [births per iter]')
-ax.set_ylim([0.8, 1.06])
+ax.set_ylabel('Cumulative births')
+ax.set_xlim([0, 100])
+# ax.set_ylim([0.8, 1.06])
 
 ax = axs[2]
 x = np.arange(ep_len)
 y1, y2 = mean_confidence_interval(population[1, :, :])
 y2 = np.where(y1 == y2, y2+1e-3, y2)
+ax.plot(x, population[1, :, :].mean(axis=0))
 ax.fill_between(x, y1=y1, y2=y2, label='Kinship detection', alpha=0.5)
 y1, y2 = mean_confidence_interval(population[0, :, :])
 y2 = np.where(y1 == y2, y2+1e-3, y2)
+ax.plot(x, population[0, :, :].mean(axis=0))
 ax.fill_between(x, y1=y1, y2=y2, label='No kinship detection', alpha=0.5)
-ax.legend(loc='lower left')
+ax.legend(loc='upper left')
 ax.set_xlabel('iteration')
 ax.set_ylabel('Total population')
-ax.set_ylim([10, 60])
+ax.set_xlim([0, 100])
 # ax = axs[1]
 # y1, y2 = mean_confidence_interval(births[1, :, :])
 # y2 = np.where(y1 == y2, y2+1e-3, y2)

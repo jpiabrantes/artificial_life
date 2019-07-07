@@ -5,12 +5,10 @@ from collections import defaultdict
 from tqdm import tqdm
 plt.style.use('bmh')
 
-
-
 features = ['age', 'health', 'sugar', 'allele_freq']
 e_features = ['e_%s' % f for f in features]
 
-paths = ['replay/data/%s' % name for name in ('VDN.csv',)]
+paths = ['replay/data/%s' % name for name in ('0_VDN.csv',)]
 df_names = ['VDN']
 dfs = [pd.read_csv(path) for path in paths]
 df = dfs[0]
@@ -67,7 +65,7 @@ def bootstrap_resample(n_samples, ages, df):
 
 
 ages = range(49)
-mu, yerr = bootstrap_resample(1000, ages, df[:2000000])
+mu, yerr = bootstrap_resample(10, ages, df[:2000000])
 
 plt.figure()
 plt.plot(ages, mu*100, 'o-')
@@ -99,7 +97,7 @@ def bootstrap_resample(n_samples, ages, df):
 
 
 ages = range(49)
-mu, yerr = bootstrap_resample(1000, ages, df[:2000000])
+mu, yerr = bootstrap_resample(10, ages, df[:2000000])
 
 plt.figure()
 plt.plot(ages[1:], mu[1:]*100, 'o-')

@@ -56,7 +56,7 @@ class Sampler:
                 for species_index, info in species_info.items():
                     qn.set_weights(weights[species_index])
                     eps = eps_dict[species_index]
-                    observation_arr = np.stack(info['obs'])
+                    observation_arr = np.stack(info['obs']).astype(np.float32)
                     actions = qn.get_actions(observation_arr, eps)
                     info['actions'] = actions
                     for agent_name, action in zip(info['agents'], actions):

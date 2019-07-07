@@ -24,15 +24,16 @@ Weights = namedtuple('Weights', ('main', 'target'))
 # env
 # env = BacteriaColony(env_default_config)
 config = env_default_config.copy()
-config['max_iters'] = 750
+ep_len = 1000
+config['max_iters'] = ep_len
 config['update_stats'] = True
 env = DeadlyColony(config)
 
 
 # actor
-policy_args = {'conv_sizes': [(32, (3, 3), 1), (32, (3, 3), 1)],
+policy_args = {'conv_sizes': [(32, (3, 3), 1)],
                'fc_sizes': [16],
-               'last_fc_sizes': [32],
+               'last_fc_sizes': [64, 32],
                'conv_input_shape': env.actor_terrain_obs_shape,
                'fc_input_length': np.prod(env.observation_space.shape) - np.prod(env.actor_terrain_obs_shape),
                'num_outputs': env.action_space.n,
@@ -51,7 +52,7 @@ ac_kwarg = {'actor_args': policy_args, 'critic_args': critic_args, 'observation_
 ac_creator = lambda: COMAActorCritic(**ac_kwarg)
 
 
-exp_name = 'VDN'
+exp_name = 'EvolutionStrategies'
 if exp_name == 'EvolutionStrategies':
     last_generation, mu0_list, stds_list, filters = load_variables(env)
     obs_filter = filters['MeanStdFilter']
@@ -105,8 +106,11 @@ elif exp_name == 'VDN':
 else:
     print('passing')
 
-for i in range(90):
+# allele_counts_exp = np.zeros((90, 5, ep_len))
+for i in range(1):
     print(i)
-    ep_len, population_integral = rollout(env, '%d_VDN_no' % i, policies, species_indices, obs_filter, save_dict=True)
+    ep_len, population_integral, allele_counts = rollout(env, 'VDN', policies, species_indices, obs_filter,
+                                                         save_dict=True)
+    # allele_counts_exp[i, :, :] = allele_counts
     print('Episode length: ', ep_len)
     print('Population integral: ', population_integral)
