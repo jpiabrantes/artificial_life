@@ -40,7 +40,7 @@ class Trainer:
                 n_actions = main_qn.get_actions(n_obs[alive_mask], 0)
                 q_out = target_qn.q.predict(n_obs[alive_mask])
                 double_q = q_out[range(len(n_actions)), n_actions]
-                target_q[i] += self.gamma * np.sum(double_q)
+                target_q[i] += self.gamma * np.mean(double_q)
 
         # Update the network with our target values.
         with tf.GradientTape() as t:
