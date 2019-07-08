@@ -33,7 +33,7 @@ def load(env, exp_name):
 class VDNTrainer:
     def __init__(self, env_creator,  brain_creator, population_size, gamma=0.99,
                  start_eps=1, end_eps=0.1, annealing_steps=50000, tau=0.001, n_trainers=5,
-                 n_samplers=20, num_envs_per_sampler=18, num_of_steps_per_sample=1, learning_rate=0.0005, load=False,
+                 n_samplers=20, num_envs_per_sampler=20, num_of_steps_per_sample=1, learning_rate=0.0005, load=False,
                  test_freq=200, save_freq=1):
         env = env_creator()
         self.env = env
