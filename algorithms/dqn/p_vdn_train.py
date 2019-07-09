@@ -32,8 +32,8 @@ def load(env, exp_name):
 
 class VDNTrainer:
     def __init__(self, env_creator,  brain_creator, population_size, gamma=0.99,
-                 start_eps=1, end_eps=0.1, annealing_steps=50000, tau=0.001, n_trainers=2,
-                 n_samplers=2, num_envs_per_sampler=20, num_of_steps_per_sample=1, learning_rate=0.0005, load=False,
+                 start_eps=1, end_eps=0.1, annealing_steps=50000, tau=0.001, n_trainers=5,
+                 n_samplers=20, num_envs_per_sampler=20, num_of_steps_per_sample=1, learning_rate=0.0005, load=False,
                  test_freq=200, save_freq=1):
         env = env_creator()
         self.env = env
@@ -213,5 +213,5 @@ if __name__ == '__main__':
                 'action_space': env.action_space}
     brain_creator = lambda: VDNMixer(**q_kwargs)
 
-    ray.init(local_mode=True)
+    ray.init(local_mode=False)
     trainer = VDNTrainer(env_creator, brain_creator, population_size=5)

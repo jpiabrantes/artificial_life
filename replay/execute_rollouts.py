@@ -52,7 +52,7 @@ ac_kwarg = {'actor_args': policy_args, 'critic_args': critic_args, 'observation_
 ac_creator = lambda: COMAActorCritic(**ac_kwarg)
 
 
-exp_name = 'EvolutionStrategies'
+exp_name = 'VDN'
 if exp_name == 'EvolutionStrategies':
     last_generation, mu0_list, stds_list, filters = load_variables(env)
     obs_filter = filters['MeanStdFilter']

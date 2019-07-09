@@ -69,7 +69,7 @@ class MainHolder:
     def render(self, dict_):
         for child in self.children:
             child.render(dict_)
-        pygame.image.save(self.screen, 'images/%d.png' % self.g_variables.iter)
+        # pygame.image.save(self.screen, 'images/%d.png' % self.g_variables.iter)
 
 
 class GameController:
