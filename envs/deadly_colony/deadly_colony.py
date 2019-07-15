@@ -214,7 +214,7 @@ class DeadlyColony:
                                     'survivors': len(self.agents), 'life_expectancy': self.life_expectancy.mean,
                                     'average_population': self.average_population.mean}
 
-            for i, count in self.dna_total_score.items():
+            for i, count in enumerate(self.dna_total_score):
                 info_dict['__all__']['%d_score' % (i + 1)] = count
             attack_metrics = {}
             for k, v in self.attack_metrics.items():

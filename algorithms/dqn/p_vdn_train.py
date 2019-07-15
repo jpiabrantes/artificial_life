@@ -94,7 +94,7 @@ class VDNTrainer:
                     dict_ = species_dict[species_index]
                     dict_['steps'] += len(buffer.buffer)
                     if dict_['steps'] > annealing_steps:
-                        coeff = (dict_['steps']-annealing_steps)/(100*annealing_steps)
+                        coeff = (dict_['steps']-annealing_steps)/(1000*annealing_steps)
                         dict_['eps'] = max(coeff * 0.01 + (1 - coeff) * end_eps, 0.01)
                     else:
                         coeff = dict_['steps']/annealing_steps
