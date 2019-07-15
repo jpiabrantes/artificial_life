@@ -24,7 +24,7 @@ Weights = namedtuple('Weights', ('main', 'target'))
 # env
 # env = BacteriaColony(env_default_config)
 config = env_default_config.copy()
-ep_len = 1000
+ep_len = 500
 config['max_iters'] = ep_len
 config['update_stats'] = True
 env = DeadlyColony(config)
@@ -107,9 +107,9 @@ else:
     print('passing')
 
 # allele_counts_exp = np.zeros((90, 5, ep_len))
-for i in range(1):
+for i in range(90):
     print(i)
-    ep_len, population_integral, allele_counts = rollout(env, 'VDN', policies, species_indices, obs_filter,
+    ep_len, population_integral, allele_counts = rollout(env, 'VDN_%d' % i, policies, species_indices, obs_filter,
                                                          save_dict=True)
     # allele_counts_exp[i, :, :] = allele_counts
     print('Episode length: ', ep_len)

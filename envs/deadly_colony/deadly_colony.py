@@ -213,6 +213,9 @@ class DeadlyColony:
             info_dict['__all__'] = {'surplus': self.surplus.mean, 'babies_born': self.babies_born,
                                     'survivors': len(self.agents), 'life_expectancy': self.life_expectancy.mean,
                                     'average_population': self.average_population.mean}
+
+            for i, count in self.dna_total_score.items():
+                info_dict['__all__']['%d_score' % (i + 1)] = count
             attack_metrics = {}
             for k, v in self.attack_metrics.items():
                 if type(v) is int:
@@ -264,7 +267,6 @@ class DeadlyColony:
                     cols = np.mod(agent_col + grid, self.n_cols)
                     img = img[np.ix_(rows, cols)]
                     state = state[np.ix_(rows, cols)]
-
 
             img = np.array(Image.fromarray((img * 255).astype(np.uint8)).resize((resolution, resolution),
                                                                                 Image.NEAREST))

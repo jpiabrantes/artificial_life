@@ -199,14 +199,14 @@ if __name__ == '__main__':
     config['greedy_reward'] = False
     env_creator = lambda: DeadlyColony(config)
     env = env_creator()
-    q_kwargs = {'conv_sizes': [(32, (3, 3), 1)],
-                'fc_sizes': [16],
-                'last_fc_sizes': [64, 32],
-                'conv_input_shape': env.actor_terrain_obs_shape,
-                'fc_input_length': np.prod(env.observation_space.shape) - np.prod(env.actor_terrain_obs_shape),
-                'action_space': env.action_space,
-                'obs_input_shape': env.observation_space.shape}
-    brain_creator = lambda: VDNMixer_2(**q_kwargs)
+    # q_kwargs = {'conv_sizes': [(32, (3, 3), 1)],
+    #             'fc_sizes': [16],
+    #             'last_fc_sizes': [64, 32],
+    #             'conv_input_shape': env.actor_terrain_obs_shape,
+    #             'fc_input_length': np.prod(env.observation_space.shape) - np.prod(env.actor_terrain_obs_shape),
+    #             'action_space': env.action_space,
+    #             'obs_input_shape': env.observation_space.shape}
+    # brain_creator = lambda: VDNMixer_2(**q_kwargs)
 
     q_kwargs = {'hidden_units': [512, 256, 128],
                 'observation_space': env.observation_space,
