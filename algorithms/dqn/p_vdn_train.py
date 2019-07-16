@@ -196,7 +196,7 @@ if __name__ == '__main__':
     from envs.deadly_colony.env_config import env_default_config
 
     config = env_default_config.copy()
-    config['greedy_reward'] = False
+    config['greedy_reward'] = True
     env_creator = lambda: DeadlyColony(config)
     env = env_creator()
     # q_kwargs = {'conv_sizes': [(32, (3, 3), 1)],
