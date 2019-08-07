@@ -110,20 +110,19 @@ class Sampler:
                         buf, rew = agent_buffers[agent_name], reward_dict[agent_name]
                         ep_ret += rew
                         buf.store(obs, action, rew, q_tak, adv, log_prob, pi, loc, dna, global_iteration)
+                        val = val_map[loc[0], loc[1]]
                         if done_dict[agent_name]:  # if entity died
                             kinship_map = self.env.get_kinship_map(agent_name)
                             if np.any(kinship_map > 0):
-                                last_value = 0  # 1/np.sum(kinship_map)*(kinship_map*val_map).sum()
+                                last_value = 1/np.sum(kinship_map)*(kinship_map*val_map).sum()
                             else:
                                 last_value = 0
                             buf.finnish_path(last_value)
                         # if entity is alive but episode is over or we're done sampling
                         elif done_dict['__all__']:
                             # infinite episode
-                            # buf.finnish_path(val)
-                            buf.finnish_path(0)
+                            buf.finnish_path(val)
                         elif done_sampling:
-                            val = val_map[loc[0], loc[1]]
                             buf.finnish_path(val)
 
             global_dict[global_iteration] = [raw_state_action, len(reward_dict)]

@@ -2,8 +2,11 @@ import ray
 import tensorflow as tf
 import numpy as np
 
-from envs.bacteria_colony.bacteria_colony import BacteriaColony
-from envs.bacteria_colony.env_config import env_default_config
+# from envs.bacteria_colony.bacteria_colony import BacteriaColony
+# from envs.bacteria_colony.env_config import env_default_config
+from envs.deadly_colony.deadly_colony import DeadlyColony
+from envs.deadly_colony.env_config import env_default_config
+
 from models.base import PPOActorCritic
 from algorithms.ppo.multi_ppo import MultiAgentPPOTrainer
 
@@ -15,12 +18,12 @@ if not EAGER:
 load = False
 generation = 0
 epochs = 5000
-save_freq = 100
+save_freq = 10
 
 # env
 config = env_default_config.copy()
 config['greedy_reward'] = True
-env_creator = lambda: BacteriaColony(config)
+env_creator = lambda: DeadlyColony(config)
 env = env_creator()
 
 # algorithm

@@ -6,8 +6,8 @@ import pygame
 from replay.panes import BacteriaAttributeRenderer, PolicyRenderer, GameRenderer, FamilyRenderer
 
 
-HEIGHT = 512
-WIDTH = 1024
+HEIGHT = 1000
+WIDTH = 1500
 
 
 class GlobalVariables:
@@ -32,6 +32,14 @@ class GlobalVariables:
         index = (step + self.agent_names.index(self.following_agent_id)) % len(self.agent_names)
         self.following_agent_id = self.agent_names[index]
 
+    def click(self, pos):
+        x, y = pos
+        row, col = int(y*50/HEIGHT), int(x*50/HEIGHT)
+        dict_ = dicts[self.iter]
+        for agent_name, agent_dict in dict_['agents'].items():
+            if agent_dict['row'] == row and agent_dict['col'] == col:
+                self.following_agent_id = agent_name
+
     def scroll(self, step):
         self.zoom = max(min(self.zoom+step, 24), 2)
 
@@ -46,21 +54,25 @@ class MainHolder:
         self._set_layout()
 
     def _set_layout(self):
-        game_screen = self.screen.subsurface(0, 0, self.width//2, self.width//2)
+        game_screen = self.screen.subsurface(0, 0, 1000, 1000)
         self.children.add(GameRenderer(game_screen, self.g_variables))
 
-        attr_screen = self.screen.subsurface(self.width // 2, 0, self.width//2, self.height//4)
-        self.children.add(BacteriaAttributeRenderer(attr_screen, self.g_variables))
+        # attr_screen = self.screen.subsurface(self.width // 2, 0, self.width//2, self.height//4)
+        # self.children.add(BacteriaAttributeRenderer(attr_screen, self.g_variables))
 
-        policy_screen = self.screen.subsurface(self.width // 2, self.height//4, self.width//2, self.height // 4)
-        self.children.add(PolicyRenderer(policy_screen, self.g_variables))
+        # policy_screen = self.screen.subsurface(self.width // 2, self.height//4, self.width//2, self.height // 4)
+        # self.children.add(PolicyRenderer(policy_screen, self.g_variables))
 
-        family_screen = self.screen.subsurface(self.width // 2, 2*self.height//4, self.width//2, 2*self.height // 4)
-        self.children.add(FamilyRenderer(family_screen, self.g_variables))
+        # family_screen = self.screen.subsurface(1000, self.height//4, self.width//2, 2*self.height//4)
+        # self.children.add(FamilyRenderer(family_screen, self.g_variables, rotate=False))
+
+        family_screen = self.screen.subsurface(1000, 0, 500, 1000)
+        self.children.add(FamilyRenderer(family_screen, self.g_variables, rotate=True))
 
     def render(self, dict_):
         for child in self.children:
             child.render(dict_)
+        pygame.image.save(self.screen, 'images/%d.png' % self.g_variables.iter)
 
 
 class GameController:
@@ -109,7 +121,9 @@ class GameController:
                 clock.tick(fps)
 
     def _handle_mouse_event(self, event):
-        if event.button == 4:
+        if event.button == 1:
+            self.g_struct.click(event.pos)
+        elif event.button == 4:
             self.g_struct.scroll(-1)
         elif event.button == 5:
             self.g_struct.scroll(1)
@@ -125,11 +139,14 @@ class GameController:
 clock = pygame.time.Clock()
 fps = 24
 if __name__ == '__main__':
-    from envs.bacteria_colony.bacteria_colony import BacteriaColony
-    from envs.bacteria_colony.env_config import env_default_config
+    # from envs.bacteria_colony.bacteria_colony import BacteriaColony
+    # from envs.bacteria_colony.env_config import env_default_config
 
-    env = BacteriaColony(env_default_config)
-    expname = 'MultiPPO'  # 'EvolutionStrategies' ,'MultiPPO'
+    from envs.deadly_colony.deadly_colony import DeadlyColony
+    from envs.deadly_colony.env_config import env_default_config
+
+    env = DeadlyColony(env_default_config)
+    expname = 'EvolutionStrategies'  # 'EvolutionStrategies' ,'MultiPPO'
 
     with open(os.path.join('./dicts', expname+'.pkl'), 'rb') as f:
         dicts = pickle.load(f)

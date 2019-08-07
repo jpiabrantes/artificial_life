@@ -28,6 +28,12 @@ def get_coma_explained_variance(n_actions):
     return explained_variance
 
 
+def ppo_explained_variance(ret_val, values):
+    # a trick to input actions and td(lambda) through same API
+    returns, _ = [tf.squeeze(v) for v in tf.split(ret_val, 2, axis=-1)]
+    return explained_variance(returns, values)
+
+
 def explained_variance(y, y_hat):
     error = y - y_hat
     return 1 - variance(error)/variance(y)

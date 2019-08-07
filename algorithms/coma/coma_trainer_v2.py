@@ -78,7 +78,7 @@ class MultiAgentCOMATrainer:
         if get_number_of_gpus() > 0:
             trainer = ray.remote(num_gpus=1)(Trainer)
         else:
-            trainer = ray.remote()(Trainer)
+            trainer = ray.remote(Trainer)
         self.trainers = [trainer.remote(ac_creator, batch_size, normalise_advantages, train_pi_iters, train_v_iters,
                                         value_lr, pi_lr, env_creator, target_kl, clip_ratio, vf_clip_param,
                                         entropy_coeff)
@@ -92,7 +92,7 @@ class MultiAgentCOMATrainer:
                                         population_size, normalise_observation) for i in range(n_workers)]
 
     def set_family_reward_coeffs(self, epoch):
-        coeff = 1-np.exp(-epoch/250)
+        coeff = 1  # 1-np.exp(-epoch/250)
         coeff_dict = {k: coeff for k in range(1, self.population_size)}
         coeff_dict[0] = 0.
         for sampler in self.samplers:
@@ -115,7 +115,7 @@ class MultiAgentCOMATrainer:
             species_buffers = {}
             train_summary_writer = tf.summary.create_file_writer(tensorboard_folder)
             for epoch in range(epochs):
-                if generation > 0:
+                if generation > -1:
                     self.set_family_reward_coeffs(epoch)
                 total_time = time()
                 with Timer() as sampling_time:
@@ -239,7 +239,7 @@ class MultiAgentCOMATrainer:
             species_indices[2] = results[-2][0]
             species_indices[3] = results[-3][0]
             species_indices[4] = results[-4][0]
-            species_indices[5:] = old_species_sampler.sample(self.population_size-5)
+            species_indices[5:] = old_species_sampler.sample_steps(self.population_size - 5)
             new_weights = [None]*self.population_size
             for new_species_index, species_index in enumerate(species_indices):
                 species_folder = os.path.join(generation_folder, str(new_species_index))
