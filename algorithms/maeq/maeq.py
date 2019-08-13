@@ -30,7 +30,7 @@ def load(env, exp_name):
     return filters, weights
 
 
-class VDNTrainer:
+class MAEQTrainer:
     def __init__(self, env_creator,  brain_creator, population_size, gamma=0.99,
                  start_eps=1, end_eps=0.1, annealing_steps=100000, tau=0.001, n_trainers=1,
                  n_samplers=20, num_envs_per_sampler=20, num_of_steps_per_sample=1, learning_rate=0.0005, load=False,
@@ -214,4 +214,4 @@ if __name__ == '__main__':
     # brain_creator = lambda: VDNMixer(**q_kwargs)
 
     ray.init(local_mode=False)
-    trainer = VDNTrainer(env_creator, brain_creator, population_size=1)
+    trainer = MAEQTrainer(env_creator, brain_creator, population_size=1)

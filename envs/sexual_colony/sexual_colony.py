@@ -287,17 +287,6 @@ class SexualColony:
         else:
             super(SexualColony, self).render(mode)
 
-    def get_kinship_map(self, agent_name):
-        """
-        Returns a kinship 2D map in respect to the requested agent.
-        Note: This will be called by the optimisation algorithm.
-
-        :param agent_name: string
-        :return: array (n_rows, n_cols)
-        """
-        dna = self.agent_dna[agent_name]
-        return self._state[:, :, State.DNA] == dna
-
     def to_dict(self):
         agents_dict = {}
         for agent in self.agents.values():
@@ -343,8 +332,8 @@ class SexualColony:
             row = loc // self.n_cols
             col = loc % self.n_cols
             tile = self.tiles[row, col]
-            Agent(row, col, self.birth_endowment, self.metabolism, self.fertility_age, self.infertility_age,
-                  self.longevity, tile, self.add_agent_callback, species_index, self.attack_metrics)
+            Agent(self.birth_endowment, self.metabolism, self.fertility_age, self.infertility_age, self.longevity, tile,
+                  self.add_agent_callback, species_index, self.attack_metrics)
 
     def _grow_sugar(self):
         self._state[:, :, Terrain.SUGAR] = np.minimum(self._state[:, :, Terrain.SUGAR]
@@ -459,7 +448,7 @@ class Tile:
 
 
 class Agent:
-    def __init__(self, row, col, endowment, metabolism, fertility_age, infertility_age, longevity, tile,
+    def __init__(self, endowment, metabolism, fertility_age, infertility_age, longevity, tile,
                  bring_agent_to_world_fn, species_index, attack_metrics, dna=None):
         self.alive = True
 
@@ -468,8 +457,8 @@ class Agent:
         id_ = bring_agent_to_world_fn(self)
         self.dna = self._generate_dna() if dna is None else dna
         self.id = '{}_{:d}'.format(species_index, id_)
-        self.row = row
-        self.col = col
+        self.row = tile.row
+        self.col = tile.col
         self.endowment = endowment
         self.sugar = endowment
         self.metabolism = metabolism
@@ -503,7 +492,7 @@ class Agent:
                 child_dna = self._create_egg(mate)
                 self.sugar -= self.endowment/2
                 mate.sugar -= mate.endowment/2
-                newborn = Agent(self.row, self.col, self.endowment, self.metabolism, self.fertility_age,
+                newborn = Agent(self.endowment, self.metabolism, self.fertility_age,
                                 self.infertility_age, self.longevity, child_tile, self.bring_agent_to_world_fn,
                                 child_species_index, self.attack_metrics, child_dna)
                 mate.newborn = newborn
