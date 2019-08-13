@@ -9,8 +9,8 @@ import tensorflow as tf
 
 from utils.misc import Timer
 from utils.filters import MeanStdFilter, FilterManager
-from algorithms.dqn.sampler import Sampler
-from algorithms.dqn.trainer import Trainer
+from algorithms.maeq.maeq_sampler import Sampler
+from algorithms.maeq.maeq_trainer import Trainer
 
 
 Networks = namedtuple('Networks', ('main', 'target'))
@@ -33,7 +33,7 @@ def load(env, exp_name):
 class VDNTrainer:
     def __init__(self, env_creator,  brain_creator, population_size, gamma=0.99,
                  start_eps=1, end_eps=0.1, annealing_steps=100000, tau=0.001, n_trainers=1,
-                 n_samplers=2, num_envs_per_sampler=20, num_of_steps_per_sample=1, learning_rate=0.0005, load=False,
+                 n_samplers=20, num_envs_per_sampler=20, num_of_steps_per_sample=1, learning_rate=0.0005, load=False,
                  test_freq=200, save_freq=1):
         env = env_creator()
         self.env = env
@@ -72,7 +72,7 @@ class VDNTrainer:
                             for species_index in range(population_size)}
         samplers = [Sampler.remote(env_creator, num_envs_per_sampler, num_of_steps_per_sample,
                                    brain_creator) for _ in range(n_samplers)]
-        trainers = [Trainer.remote(brain_creator, gamma, learning_rate) for _ in range(n_trainers)]
+        trainers = [Trainer.remote(brain_creator, gamma, learning_rate, env.action_space.n) for _ in range(n_trainers)]
 
         # Set the rate of random action decrease.
 
@@ -213,5 +213,5 @@ if __name__ == '__main__':
     #             'action_space': env.action_space}
     # brain_creator = lambda: VDNMixer(**q_kwargs)
 
-    ray.init(local_mode=True)
-    trainer = VDNTrainer(env_creator, brain_creator, population_size=5)
+    ray.init(local_mode=False)
+    trainer = VDNTrainer(env_creator, brain_creator, population_size=1)

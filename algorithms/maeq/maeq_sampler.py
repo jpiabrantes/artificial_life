@@ -73,21 +73,20 @@ class Sampler:
                                        ('reward', 'done')):
                     assert set(action_dict.keys()) == set_, "You should have a {} for each agent that sent an action." \
                                                             "\n{} vs {}".format(label, set_, action_dict.keys())
-
                 if training:
                     # Save the experience in each species episode buffer
-                    step_buffer = defaultdict(lambda: defaultdict(list))
+                    step_buffer = []
                     for species_index, info in species_info.items():
-                        for agent_name, obs, action, dna in zip(*[info[f] for f in ('agents', 'obs', 'actions', 'dna')]):
+                        for agent_name, obs, action, dna in zip(*[info[f] for f in ('agents', 'obs', 'actions',
+                                                                                    'dna')]):
                             rew, done = reward_dict[agent_name], done_dict[agent_name]
                             n_obs = n_raw_obs_dict.get(agent_name, None)
                             if n_obs is not None:
                                 n_obs = self.filters['ActorObsFilter'](n_obs, update=False)
                             else:
                                 n_obs = obs * np.nan
-                            step_buffer[species_index][dna].append((obs, action, rew, n_obs, done))
-                        for dna_step in step_buffer[species_index].values():
-                            species_buffers[species_index].add_step(dna_step)
+                            step_buffer.append((obs, action, rew, n_obs, done, dna))
+                        species_buffers[species_index].add_step(step_buffer)
 
                 raw_obs_dict = n_raw_obs_dict
                 ep_rew += sum(reward_dict.values())

@@ -6,7 +6,8 @@ import tensorflow as tf
 
 @ray.remote(num_cpus=1)
 class Trainer:
-    def __init__(self, brain_creator, gamma, learning_rate):
+    def __init__(self, brain_creator, gamma, learning_rate, action_space_dim):
+        self.action_space_dim = action_space_dim
         self.main_qn, self.target_qn = brain_creator(), brain_creator()
         self.gamma = gamma
         self.optimiser = tf.keras.optimizers.Adam(learning_rate=learning_rate)
@@ -33,11 +34,11 @@ class Trainer:
                 double_q = np.zeros((n_agents,), np.float32)
                 if np.any(alive_mask):
                     n_actions = main_qn.get_actions(n_obs[alive_mask], 0)
-                    n_q_out = target_qn.q.predict(n_obs([alive_mask]))
+                    n_q_out = target_qn.q.predict(n_obs[alive_mask])
                     double_q[alive_mask] = n_q_out[range(len(n_actions)), n_actions]
 
-                q_out = main_qn.q.predict(obs)
-                q = tf.reduce_sum(tf.one_hot(tf.cast(act, tf.int32), self.action_space.n)*q_out, axis=1)
+                q_out = main_qn.q(obs)
+                q = tf.reduce_sum(tf.one_hot(tf.cast(act, tf.int32), self.action_space_dim)*q_out, axis=1)
 
                 for i in range(n_agents):
                     kinship = np.mean((dna[i] == dna), axis=-1)
