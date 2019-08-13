@@ -447,14 +447,14 @@ class Tile:
             assert agent != self.agent, 'agent trying to enter same tile twice'
             return False
         self.agent = agent
-        self._dna_at_tile = self.agent.dna
+        self._dna_at_tile[:] = self.agent.dna
         self._state_at_tile[Terrain.AGENTS] += 1
         return True
 
     def remove_agent(self, agent):
         assert agent == self.agent, 'Agent is trying to be removed from the wrong tile'
         self.agent = None
-        self._dna_at_tile = np.zeros_like(self._dna_at_tile)
+        self._dna_at_tile[:] = 0
         self._state_at_tile[State.AGENTS] -= 1
 
 

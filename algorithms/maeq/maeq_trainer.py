@@ -52,4 +52,4 @@ class Trainer:
 
         grads = t.gradient(loss, main_qn.variables)
         self.optimiser.apply_gradients(zip(grads, main_qn.variables))
-        return main_qn.get_weights(), pickle.dumps(self.optimiser.get_weights()), loss
+        return main_qn.get_weights(), pickle.dumps(self.optimiser.get_weights()), loss.__array__()
