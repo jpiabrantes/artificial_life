@@ -4,7 +4,6 @@ import numpy as np
 import ray
 
 from utils.buffers import VDNReplayBuffer, EpStats
-from utils.misc import agent_name_to_species_index_fn
 from utils.filters import MeanStdFilter
 
 
@@ -48,12 +47,13 @@ class Sampler:
             for step in range(num_of_steps):
                 del raw_obs_dict['state']
                 # collect observations for each species
-                species_info = defaultdict(lambda: {'obs': [], 'agents': []})
+                species_info = defaultdict(lambda: {'obs': [], 'agents': [], 'dna': []})
                 for agent_name, raw_obs in raw_obs_dict.items():
-                    species_index = agent_name_to_species_index_fn(agent_name)
+                    species_index = 0
                     species_info[species_index]['agents'].append(agent_name)
                     filter_ = self.filters['ActorObsFilter']
                     species_info[species_index]['obs'].append(filter_(raw_obs, self.filters))
+                    species_info[species_index]['dna'].append(env.agents[agent_name].dna)
 
                 # compute actions of each species
                 action_dict = {}
@@ -76,17 +76,18 @@ class Sampler:
 
                 if training:
                     # Save the experience in each species episode buffer
-                    step_buffer = []
+                    step_buffer = defaultdict(lambda: defaultdict(list))
                     for species_index, info in species_info.items():
-                        for agent_name, obs, action in zip(*[info[f] for f in ('agents', 'obs', 'actions')]):
+                        for agent_name, obs, action, dna in zip(*[info[f] for f in ('agents', 'obs', 'actions', 'dna')]):
                             rew, done = reward_dict[agent_name], done_dict[agent_name]
                             n_obs = n_raw_obs_dict.get(agent_name, None)
                             if n_obs is not None:
                                 n_obs = self.filters['ActorObsFilter'](n_obs, update=False)
                             else:
                                 n_obs = obs * np.nan
-                            step_buffer.append((obs, action, rew, n_obs, done))
-                        species_buffers[species_index].add_step(step_buffer)
+                            step_buffer[species_index][dna].append((obs, action, rew, n_obs, done))
+                        for dna_step in step_buffer[species_index].values():
+                            species_buffers[species_index].add_step(dna_step)
 
                 raw_obs_dict = n_raw_obs_dict
                 ep_rew += sum(reward_dict.values())
