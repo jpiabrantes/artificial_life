@@ -23,7 +23,7 @@ class Sampler:
         self.ep_stats = EpStats()
 
     def _sample_species_indices(self):
-        return np.random.randint(5, size=5)
+        return None  #np.random.randint(5, size=5)
 
     def _randomise_episode_length(self, env):
         noise = int(self.max_iters*0.1)

@@ -31,23 +31,29 @@ class Trainer:
                                                                                             np.float32, np.float32,
                                                                                             np.bool, np.uint32))]
                 alive_mask = np.logical_not(done)
-                double_q = np.zeros((n_agents,), np.float32)
                 if np.any(alive_mask):
                     n_actions = main_qn.get_actions(n_obs[alive_mask], 0)
                     n_q_out = target_qn.q.predict(n_obs[alive_mask])
-                    double_q[alive_mask] = n_q_out[range(len(n_actions)), n_actions]
+                    double_q = n_q_out[range(len(n_actions)), n_actions]
 
                 q_out = main_qn.q(obs)
                 q = tf.reduce_sum(tf.one_hot(tf.cast(act, tf.int32), self.action_space_dim)*q_out, axis=1)
 
                 for i in range(n_agents):
-                    kinship = np.mean((dna[i] == dna), axis=-1)
+                    agent_dna = dna[i]
+                    kinship = np.mean((agent_dna == dna), axis=-1)
                     n = np.sum(kinship)
-                    Q = 1/n*tf.reduce_sum(kinship*q)
+                    assert n > 0, 'n needs to be greater than zero'
+                    Q = 1 / n * tf.reduce_sum(kinship * q)
+
+                    n_kinship = np.mean((agent_dna == dna[alive_mask]), axis=-1)
+                    n_n = np.sum(n_kinship)
+
                     if alive_mask[i]:
-                        target_q = rew[i] + self.gamma * 1/n * np.sum(kinship*double_q)
+                        assert n_n > 0, 'n_n needs to be greater than zero'
+                        target_q = rew[i] + self.gamma * 1/n_n * np.sum(n_kinship*double_q)
                     else:
-                        target_q = 0 if n == 0 else 1/n*np.sum(kinship*double_q)
+                        target_q = 0 if n_n == 0 else 1/n_n*np.sum(n_kinship*double_q)
                     loss += tf.square(Q-target_q)
 
         grads = t.gradient(loss, main_qn.variables)
