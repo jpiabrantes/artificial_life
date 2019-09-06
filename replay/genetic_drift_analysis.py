@@ -2,13 +2,14 @@ import os
 import pickle
 import matplotlib.pylab as plt
 import numpy as np
+import seaborn as sns
 
 from envs.deadly_colony.deadly_colony import DeadlyColony
 from envs.deadly_colony.env_config import env_default_config
 
 env = DeadlyColony(env_default_config)
-plt.style.use('bmh')
 
+sns.set_style("darkgrid", {"axes.facecolor": ".9"})
 ep_len = 100
 n_dicts = 300
 path = '/home/joao/github/artificial_life/replay/dicts/'
@@ -68,24 +69,22 @@ for i in range(n_dicts):
         n_birth_rate[j, i, :] = scipy.signal.convolve(birth_rate[j, i, :], np.ones((window_size,)) * 1 / window_size, 'valid')
 
 
-with open('VDN.pkl', 'rb') as f:
+with open('greedy/VDN.pkl', 'rb') as f:
     alleles_counts = pickle.load(f)
 probs = alleles_counts/np.sum(alleles_counts, axis=1)[:, None, :]
 entropy = probs*np.log(probs)
 entropy[np.isnan(entropy)] = 0
 entropy_ks = -entropy.sum(axis=1)
 
-with open('VDN_gd.pkl', 'rb') as f:
+with open('greedy/nk_VDN.pkl', 'rb') as f:
     alleles_counts = pickle.load(f)
 probs = alleles_counts/np.sum(alleles_counts, axis=1)[:, None, :]
 entropy = probs*np.log(probs)
 entropy[np.isnan(entropy)] = 0
 entropy_gd = -entropy.sum(axis=1)
 
-entropy_ks = entropy[1, :, :]
-entropy_gd = entropy[0, :, :]
 plt.figure()
-x = np.arange(750)
+x = np.arange(500)
 y1, y2 = mean_confidence_interval(entropy_ks)
 y2 = np.where(y1 == y2, y2+1e-3, y2)
 plt.fill_between(x, y1=y1, y2=y2, label='Kinship detection', alpha=0.5)
@@ -95,7 +94,7 @@ y1, y2 = mean_confidence_interval(entropy_gd)
 y2 = np.where(y1 == y2, y2+1e-3, y2)
 plt.plot(x, np.mean(entropy_gd, axis=0))
 plt.fill_between(x, y1=y1, y2=y2, label='No kinship detection', alpha=0.5)
-plt.xlabel('iteration')
+plt.xlabel('Time steps')
 plt.ylabel('Entropy')
 plt.legend(loc='best')
 plt.show()

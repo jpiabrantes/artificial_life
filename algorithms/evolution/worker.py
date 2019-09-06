@@ -8,6 +8,7 @@ from utils.filters import MeanStdFilter, apply_filters
 from utils.misc import agent_name_to_species_index_fn
 from utils.buffers import EpStats
 
+
 @ray.remote(num_cpus=1)
 class Worker:
     def __init__(self, worker_index, env_creator, policy_creators, n_rollouts, normalise_observation=False):
@@ -36,7 +37,7 @@ class Worker:
                 # collect observations for each policy
                 policy_info = defaultdict(lambda: {'obs': [], 'agents': []})
                 for agent_name, raw_obs in raw_obs_dict.items():
-                    policy_index = pop_indices.index(agent_name_to_species_index_fn(agent_name))
+                    policy_index = 0#pop_indices.index(agent_name_to_species_index_fn(agent_name))
                     policy_info[policy_index]['agents'].append(agent_name)
                     policy_info[policy_index]['obs'].append(apply_filters(raw_obs, self.filters))
 

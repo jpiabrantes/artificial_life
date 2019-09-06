@@ -3,7 +3,7 @@ import os
 
 import pygame
 
-from replay.panes import BacteriaAttributeRenderer, PolicyRenderer, GameRenderer, FamilyRenderer
+from replay.panes import BacteriaAttributeRenderer, PolicyRenderer, GameRenderer, FamilyRenderer, SexualFamilyRenderer
 
 
 HEIGHT = 1000
@@ -66,8 +66,11 @@ class MainHolder:
         # family_screen = self.screen.subsurface(1000, self.height//4, self.width//2, 2*self.height//4)
         # self.children.add(FamilyRenderer(family_screen, self.g_variables, rotate=False))
 
-        family_screen = self.screen.subsurface(1000, 0, 500, 1000)
-        self.children.add(FamilyRenderer(family_screen, self.g_variables, rotate=True))
+        # family_screen = self.screen.subsurface(1000, 0, 500, 1000)
+        # self.children.add(FamilyRenderer(family_screen, self.g_variables, rotate=True))
+
+        sexual_family_screen = self.screen.subsurface(1000, 0, 500, 1000)
+        self.children.add(SexualFamilyRenderer(sexual_family_screen, self.g_variables, rotate=True))
 
     def render(self, dict_):
         for child in self.children:
@@ -139,14 +142,15 @@ class GameController:
 clock = pygame.time.Clock()
 fps = 24
 if __name__ == '__main__':
-    # from envs.bacteria_colony.bacteria_colony import BacteriaColony
-    # from envs.bacteria_colony.env_config import env_default_config
+    # from envs.deadly_colony.deadly_colony import DeadlyColony
+    # from envs.deadly_colony.env_config import env_default_config
 
-    from envs.deadly_colony.deadly_colony import DeadlyColony
-    from envs.deadly_colony.env_config import env_default_config
+    from envs.sexual_colony.sexual_colony import SexualColony
+    from envs.sexual_colony.env_config import env_default_config
 
-    env = DeadlyColony(env_default_config)
-    expname = 'EvolutionStrategies'  # 'EvolutionStrategies' ,'MultiPPO'
+    # env = DeadlyColony(env_default_config)
+    env = SexualColony(env_default_config)
+    expname = 'VDN_2'  # 'EvolutionStrategies' ,'MultiPPO'
 
     with open(os.path.join('./dicts', expname+'.pkl'), 'rb') as f:
         dicts = pickle.load(f)

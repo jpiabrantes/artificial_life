@@ -17,14 +17,16 @@ from utils.buffers import concatenate_ep_stats
 
 # from envs.bacteria_colony.bacteria_colony import BacteriaColony
 # from envs.bacteria_colony.env_config import env_default_config
-from envs.deadly_colony.deadly_colony import DeadlyColony
-from envs.deadly_colony.env_config import env_default_config
+# from envs.deadly_colony.deadly_colony import DeadlyColony
+# from envs.deadly_colony.env_config import env_default_config
+from envs.sexual_colony.sexual_colony import SexualColony
+from envs.sexual_colony.env_config import env_default_config
 
 eager = False
 if not eager:
     tf.compat.v1.disable_eager_execution()
 
-env_creator = lambda: DeadlyColony(env_default_config)
+env_creator = lambda: SexualColony(env_default_config)
 env = env_creator()
 
 policy_args = {'conv_sizes': [(32, (3, 3), 1)],
@@ -60,14 +62,14 @@ def save_ep_stats(ep_stats, generation, path):
 
 po = policy_creator()
 rollouts_per_group = 1
-popsize = 45
-n_groups_per_sample = 10
-n_agents = 5
+popsize = 60
+n_groups_per_sample = 1
+n_agents = 1
 std0_list = [1.0]*n_agents
 seed = 0
 generations = 10000
 save_freq = 10
-n_workers = 40
+n_workers = 1
 load = False
 assert popsize % n_agents == 0, 'population size must be a multiple of n_agents'
 episodes_per_gen = popsize * rollouts_per_group * n_groups_per_sample

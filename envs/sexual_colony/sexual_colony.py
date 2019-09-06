@@ -66,6 +66,7 @@ class SexualColony:
         self.tiles = None
         self.iter = None
         self.agent_id = None
+        self._founders_dna = None
 
         # Tracking metrics
         self.timers = {'move': MeanTracker(), 'mate_collect_eat': MeanTracker(), 'observe': MeanTracker()}
@@ -100,7 +101,7 @@ class SexualColony:
         self.agent_id = 1
         self.babies_born = 0
         self.average_population = MeanTracker()
-        self.dna_total_score = [0]*self.n_agents
+        self.dna_total_score = [0]
         self.surplus = MeanTracker()
         self.life_expectancy = MeanTracker()
         # this will be filled by the agents (so that later newborns can add themselves to the world)
@@ -112,6 +113,7 @@ class SexualColony:
 
         self.tiles = self._create_tiles()
         self._create_agents(species_indices)
+        self._founders_dna = [agent.dna for agent in self.agents.values()]
         self.iter = 0
         return self._generate_observations()
 
@@ -197,7 +199,8 @@ class SexualColony:
         # for dna, count in zip(dnas, counts):
         #     dna_results[int(dna) - 1] = count
         #     self.dna_total_score[int(dna) - 1] += count
-
+        dna_results = [len(self.agents)]
+        self.dna_total_score[0] += dna_results[0]
         # compute the reward
         reward_dict = {}
         for agent_name in action_dict:
@@ -225,24 +228,30 @@ class SexualColony:
                 else:
                     attack_metrics[k] = v.mean
             info_dict['__all__'].update(attack_metrics)
-            # info_dict['founders_results'] = dna_results
+            info_dict['founders_results'] = dna_results
             info_dict['founders_total_results'] = self.dna_total_score
         else:
             done_dict['__all__'] = False
 
         return obs_dict, reward_dict, done_dict, info_dict
 
-    def render(self, state=None, mode='rgb_array', resolution=512, tracking_dict=None):
+    def render(self, state=None, dna_map=None, founders_dna=None, mode='rgb_array', resolution=512, tracking_dict=None):
         assert resolution >= 500
         scale = resolution/self.n_cols
         if state is None:
             state = self._state
+            dna_map = self._dna_map
+            founders_dna = self._founders_dna
         if mode == 'rgb_array':
             # agents
             a_rgb = np.zeros((self.n_rows, self.n_cols, 3), np.float32)
-            for dna in range(1, 6):
-                mask = state[:, :, State.DNA] == dna
-                a_rgb[mask, :] = np.array(DNA_COLORS[dna], dtype=np.float32)/255.
+            mask = state[:, :, State.AGENTS] == 1
+            kinship_total = np.zeros((np.sum(mask), 1))
+            for dna, colour in DNA_COLORS.items():
+                kinship_map = np.mean(dna_map[mask, :] == founders_dna[dna-1], axis=-1)
+                kinship_total[:, 0] += kinship_map
+                a_rgb[mask, :] += kinship_map[:, None]*np.array(colour, dtype=np.float32).reshape(-1, 3)/255.
+            a_rgb[mask, :] /= kinship_total
 
             # sugar
             dirt = np.array((120., 72, 0)) / 255
@@ -294,6 +303,7 @@ class SexualColony:
         result = {'agents': agents_dict,
                   'state': self._state.copy(),
                   'iter': self.iter,
+                  'dna_map': self._dna_map.copy(),
                   }
         return result
 

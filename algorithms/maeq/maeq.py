@@ -23,7 +23,7 @@ def load(env, exp_name):
     with open(os.path.join(exp_folder, 'variables.pkl'), 'rb') as f:
         filters, total_steps, episodes = pickle.load(f)
     weights = {}
-    for species_index in range(5):
+    for species_index in range(1):
         species_folder = os.path.join(exp_folder, str(species_index))
         with open(os.path.join(species_folder, 'weights.pkl'), 'rb') as f:
             weights[species_index] = pickle.load(f)
@@ -213,5 +213,5 @@ if __name__ == '__main__':
     #             'action_space': env.action_space}
     # brain_creator = lambda: VDNMixer(**q_kwargs)
 
-    ray.init(local_mode=False)
+    ray.init(local_mode=True)
     trainer = MAEQTrainer(env_creator, brain_creator, population_size=1)
