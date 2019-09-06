@@ -5,6 +5,8 @@ import numpy as np
 from PIL import Image
 import matplotlib.pylab as plt
 
+from envs.sexual_colony.sexual_colony import SexualColony
+
 pygame.font.init()
 TITLE_FONT = pygame.font.SysFont('ubuntu', size=18, bold=True)
 FONT = pygame.font.SysFont('ubuntu', size=16)
@@ -18,8 +20,12 @@ class GameRenderer:
         self.g_variables = g_variables
         self.surface = surface
         self.width, self.height = self.surface.get_size()
+        if type(self.env) is SexualColony:
+            first_dict = self.g_variables.dicts[0]['agents']
+            self.founders_dna = [founder['dna'] for founder in first_dict.values()]
 
     def render(self, iter_):
+        iteration_text = TITLE_FONT.render('Iteration %d' % iter_, True, (255, 255, 255))
         dict_ = self.g_variables.dicts[iter_]
         state = dict_['state']
         agent_dict = dict_['agents'][self.g_variables.following_agent_id]
@@ -28,9 +34,14 @@ class GameRenderer:
         tracking_dict = {'vision_mask': self.g_variables.vision_mask, 'tracking': self.g_variables.tracking,
                          'track_location': track_location, 'zoom': self.g_variables.zoom}
 
-        img = self.env.render(state=state, tracking_dict=tracking_dict)
+        if type(self.env) is SexualColony:
+            img = self.env.render(state=state, dna_map=dict_['dna_map'], founders_dna=self.founders_dna,
+                                  tracking_dict=tracking_dict)
+        else:
+            img = self.env.render(state=state, tracking_dict=tracking_dict)
         img = np.array(Image.fromarray(img).resize((self.width, self.height), Image.NEAREST))
         pygame.surfarray.blit_array(self.surface, img.transpose(1, 0, 2))
+        # self.surface.blit(iteration_text, (0, 0))
         #pygame.image.save(self.surface, 'images/%d.png' % iter_)
 
 
@@ -169,6 +180,57 @@ class FamilyRenderer:
             self.line = self.axs.axvline(x=iter_)
             self.axs.set_xlim([0, self.family_sizes.shape[1]])
             self.axs.set_ylabel('Family size', fontsize=18)
+            self.axs.set_xlabel('Iteration', fontsize=18, rotation=180*self.rotate)
+            if self.rotate:
+                plt.xticks(rotation=90)
+                plt.yticks(rotation=90)
+        else:
+            self.line.set_xdata(iter_)
+        self.fig.tight_layout()
+        self.fig.canvas.draw()
+        img = fig2rgb(self.fig, self.width, self.height, self.rotate)
+        pygame.surfarray.blit_array(self.surface, img)
+
+
+class SexualFamilyRenderer:
+    def __init__(self, surface, g_struct, rotate=False):
+        self.rotate = rotate
+        self.g_struct = g_struct
+        self.margin = 10
+        width, height = surface.get_size()
+        self.surface = surface.subsurface(self.margin, self.margin, width-2*self.margin, height-2*self.margin)
+        self.width, self.height = self.surface.get_size()
+        self.background = self.surface.copy()
+        first_dict = g_struct.dicts[0]['agents']
+        self.founders_dna = [founder['dna'] for founder in first_dict.values()]
+        self.family_sizes = self._compute_family_sizes()
+        self.fig, self.axs, self.line = None, None, None
+        self.colors = [(255, 255, 0), (0, 255, 255), (255, 0, 255), (0, 0, 0), (200, 200, 200)]
+        self.colors = [np.array(c, np.float32)/255 for c in self.colors]
+
+    def _compute_family_sizes(self):
+        env = self.g_struct.env
+        n_iters = len(self.g_struct.dicts)
+        n_families = len(self.founders_dna)
+        family_sizes = np.empty((n_families, n_iters), np.int)
+        for i in range(n_iters):
+            dna_map = self.g_struct.dicts[i]['dna_map']
+            for dna in range(1, n_families+1):
+                family_sizes[dna-1, i] = np.sum(dna_map == self.founders_dna[dna - 1])
+        return family_sizes
+
+    def render(self, iter_):
+        self.surface.blit(self.background, (0, 0))
+        if self.fig is None:
+            if self.rotate:
+                self.fig, self.axs = plt.subplots(figsize=(self.height // DPI, self.width // DPI))
+            else:
+                self.fig, self.axs = plt.subplots(figsize=(self.width // DPI, self.height // DPI))
+
+            self.axs.stackplot(np.arange(self.family_sizes.shape[1]), self.family_sizes, colors=self.colors)
+            self.line = self.axs.axvline(x=iter_)
+            self.axs.set_xlim([0, self.family_sizes.shape[1]])
+            self.axs.set_ylabel('Number of genes in the population', fontsize=18)
             self.axs.set_xlabel('Iteration', fontsize=18, rotation=180*self.rotate)
             if self.rotate:
                 plt.xticks(rotation=90)
