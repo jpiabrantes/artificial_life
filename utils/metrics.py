@@ -17,16 +17,30 @@ def entropy(acts_advs_logs, logits):
     return tf.reduce_mean(-tf.reduce_sum(tf.where(probs == 0., tf.zeros_like(probs), probs * all_log_probs), axis=1))
 
 
-def get_r2score(n_actions):
-    def r2score(acts_tds, qs):
+def get_coma_explained_variance(n_actions):
+    def explained_variance(qtak_acts_tds, qs):
         # a trick to input actions and td(lambda) through same API
-        actions, y = [tf.squeeze(v) for v in tf.split(acts_tds, 2, axis=-1)]
+        _, actions, y = [tf.squeeze(v) for v in tf.split(qtak_acts_tds, 3, axis=-1)]
         prediction = tf.reduce_sum(tf.one_hot(tf.cast(actions, tf.int32), depth=n_actions)*qs, axis=-1)
 
-        total_error = tf.reduce_sum(tf.square(y - tf.reduce_mean(y)))
-        unexplained_error = tf.reduce_sum(tf.square(y - prediction))
-        return 1 - unexplained_error/total_error
-    return r2score
+        error = y - prediction
+        return 1 - variance(error)/variance(y)
+    return explained_variance
+
+
+def ppo_explained_variance(ret_val, values):
+    # a trick to input actions and td(lambda) through same API
+    returns, _ = [tf.squeeze(v) for v in tf.split(ret_val, 2, axis=-1)]
+    return explained_variance(returns, values)
+
+
+def explained_variance(y, y_hat):
+    error = y - y_hat
+    return 1 - variance(error)/variance(y)
+
+
+def variance(x):
+    return tf.reduce_mean(tf.square(x - tf.reduce_mean(x)))
 
 
 # CALLBACKS

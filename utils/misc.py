@@ -1,8 +1,16 @@
+from collections import namedtuple
 import time
 
 import ray
 import numpy as np
 import scipy.signal
+
+
+Weights = namedtuple('Weights', ('actor', 'critic'))
+
+
+def agent_name_to_species_index_fn(agent_name):
+    return int(agent_name.split('_')[0])
 
 
 class Enum(tuple):
@@ -69,11 +77,13 @@ class SpeciesSamplerManager(object):
 
 
 class SpeciesRunningStat:
-    def __init__(self, population_size):
+    def __init__(self, population_size, initial_bias=None):
         self.population_size = population_size
         self.m = np.zeros(population_size)
         self.s = np.zeros(population_size)
         self.n = np.zeros(population_size)
+        if initial_bias is not None:
+            self.show_results(list(range(population_size)), [initial_bias]*population_size)
 
     def show_results(self, species_indices, values):
         for i, value in zip(species_indices, values):
@@ -115,9 +125,10 @@ class SpeciesRunningStat:
 
 
 class SpeciesSampler:
-    def __init__(self, population_size):
+    def __init__(self, population_size, bias=1, uniform_sample=False):
         self.rs = SpeciesRunningStat(population_size)
-        self.buffer = SpeciesRunningStat(population_size)
+        self.buffer = SpeciesRunningStat(population_size, initial_bias=bias)
+        self.uniform_sample = uniform_sample
         self._last_sample = None
 
     def show_results(self, species_indices, values):
@@ -132,7 +143,7 @@ class SpeciesSampler:
 
     def sample(self, size):
         assert self._last_sample is None, 'Show results before sampling again'
-        if np.any(self.rs.n == 0):  # if there is a species that hasn't been sampled yet, assume uniform distribution.
+        if self.uniform_sample or np.any(self.rs.n == 0):  # if there is a species that hasn't been sampled yet, assume uniform distribution.
             prob = np.ones(self.rs.population_size)/self.rs.population_size
         else:
             population = np.maximum([np.random.normal(mu, std) for mu, std in zip(self.rs.mean, self.rs.std)],

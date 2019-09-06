@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 
 from utils.filters import MeanStdFilter
-from utils.buffers import COMABuffer, EpStats
+from utils.buffers import CentralPPOBuffer, EpStats
 from utils.coma_helper import get_states_actions_for_locs_and_dna
 from utils.misc import SpeciesSampler
 
@@ -20,7 +20,7 @@ def agent_name_to_species_index_fn(agent_name):
 @ray.remote(num_cpus=1)
 class Sampler:
     def __init__(self, sample_batch_size, gamma, lamb, env_creator, ac_creator, worker_index, population_size,
-                 normalise_observation=False):
+                 normalise_observation, uniform_sample):
         self.index = worker_index
         self.sample_batch_size = sample_batch_size
         self.gamma = gamma
@@ -30,6 +30,7 @@ class Sampler:
         tf.random.set_seed(seed)
         np.random.seed(seed)
         self.env = env_creator()
+        self.states_actions_shape = (self.env.n_rows, self.env.n_cols, len(self.env.State)+1)
         self.n_acs = self.env.n_agents
         self.acs = {'ac_%d' % i: ac_creator() for i in range(self.n_acs)}
 
@@ -39,7 +40,7 @@ class Sampler:
         else:
             self.filters = {}
 
-        self.species_sampler = SpeciesSampler(population_size)
+        self.species_sampler = SpeciesSampler(population_size, uniform_sample=uniform_sample)
         self.in_an_episode = False
         self.state = None
         self.ep_stats = EpStats()
@@ -50,7 +51,6 @@ class Sampler:
         action_dict.agents == reward_dict.agents == done_dict.agents
 
         """
-        global_iteration = 0
         collected_samples = 0
         episodes_sampled = 0
         species_buffers = {}
@@ -65,7 +65,6 @@ class Sampler:
             species_ac_map = self._load_species(species_indices, weight_id_list)
             raw_obs_dict, done_dict, ep_ret, ep_len, = self.env.reset(species_indices), {'__all__': False}, 0, 0
 
-        global_dict = {}
         agent_name_ac, agent_buffers, done_dict = {}, {}, {'__all__': False}
         done_sampling = False
         while not done_sampling:
@@ -83,7 +82,7 @@ class Sampler:
             # compute state-action value and advantage
             # input: log_prob, action, global-action-state
             raw_state_action = np.concatenate((global_raw_obs, global_actions[..., None]), axis=-1)
-            val_map = self._compute_vals_and_advs(ac_info, raw_state_action, self.filters['CriticObsFilter'])
+            val_map = self._compute_vals(ac_info, raw_state_action, self.filters['CriticObsFilter'])
 
             # step
             n_raw_obs_dict, reward_dict, done_dict, info_dict = self.env.step(action_dict)
@@ -103,17 +102,17 @@ class Sampler:
 
             # store relevant info in the entities buffers
             for ac_name, info in ac_info.items():
-                for agent_name, obs, action, q_tak, log_prob, adv, pi, loc, dna in \
-                        zip(*[info[f] for f in ('agents', 'obs', 'actions', 'q_taken', 'log_probs', 'advs', 'pis',
-                                                'locs', 'dnas')]):
+                for agent_name, obs, action, val, log_prob, state_action, loc in \
+                        zip(*[info[f] for f in ('agents', 'obs', 'actions', 'vals', 'log_probs', 'states_actions',
+                                                'locs')]):
                     if agent_name in done_dict:
+                        species_index = agent_name_to_species_index_fn(agent_name)
                         buf, rew = agent_buffers[agent_name], reward_dict[agent_name]
                         ep_ret += rew
-                        buf.store(obs, action, rew, q_tak, adv, log_prob, pi, loc, dna, global_iteration)
-                        val = val_map[loc[0], loc[1]]
+                        buf.store(obs, action, rew, val, log_prob, state_action)
                         if done_dict[agent_name]:  # if entity died
                             kinship_map = self.env.get_kinship_map(agent_name)
-                            if np.any(kinship_map > 0):
+                            if species_index > 5 and np.any(kinship_map > 0):
                                 last_value = 1/np.sum(kinship_map)*(kinship_map*val_map).sum()
                             else:
                                 last_value = 0
@@ -125,8 +124,6 @@ class Sampler:
                         elif done_sampling:
                             buf.finnish_path(val)
 
-            global_dict[global_iteration] = [raw_state_action, len(reward_dict)]
-            global_iteration += 1
             if done_dict['__all__']:
                 # update vars
                 self.in_an_episode = False
@@ -162,7 +159,7 @@ class Sampler:
 
         self._collect_entity_buffers_into_species_buffers(agent_buffers, species_buffers)
 
-        return species_buffers, global_dict
+        return species_buffers
 
     def set_family_reward_coeff(self, coeff_dict):
         self.env.family_reward_coeff = lambda agent_name: coeff_dict[int(agent_name.split('_')[0])]
@@ -188,8 +185,9 @@ class Sampler:
             if agent_name not in agent_name_ac:
                 species_index = agent_name_to_species_index_fn(agent_name)
                 agent_name_ac[agent_name] = species_ac_map[species_index]
-                agent_buffers[agent_name] = COMABuffer(self.env.longevity, self.env.observation_space,
-                                                       self.env.action_space, self.gamma, self.lamb)
+                agent_buffers[agent_name] = CentralPPOBuffer(self.env.longevity, self.env.observation_space,
+                                                             self.env.action_space, self.states_actions_shape,
+                                                             self.gamma, self.lamb)
             ac_name = agent_name_ac[agent_name]
             agent = self.env.agents[agent_name]
             ac_info[ac_name]['dnas'].append(agent.dna)
@@ -203,10 +201,9 @@ class Sampler:
         action_dict = {}
         for ac_name, info in ac_info.items():
             observation_arr = np.stack(info['obs'])
-            actions, log_probs, pi = self.acs[ac_name].action_logp_pi(observation_arr)
+            actions, log_probs = self.acs[ac_name].action_logp(observation_arr)
             info['log_probs'] = log_probs
             info['actions'] = actions
-            info['pis'] = pi
             for agent_name, action, (row, col) in zip(info['agents'], actions, info['locs']):
                 action_dict[agent_name] = action
                 global_action[row, col] = action
@@ -216,16 +213,16 @@ class Sampler:
             " {} vs {}".format(action_dict.keys(), raw_obs_dict.keys())
         return action_dict, global_action
 
-    def _compute_vals_and_advs(self, ac_info, state_action, critic_filter):
+    def _compute_vals(self, ac_info, state_action, critic_filter):
         val_map = np.zeros((self.env.n_rows, self.env.n_cols), np.float32)
         for ac_name, info in ac_info.items():
             states_actions = get_states_actions_for_locs_and_dna(state_action, info['locs'], info['dnas'],
                                                                  self.env.n_rows, self.env.n_cols, self.env.State.DNA)
             for state_action in states_actions:
                 state_action[..., :-1] = critic_filter(state_action[..., :-1])
-            vals, advs = self.acs[ac_name].val_and_adv(states_actions, info['actions'], info['pis'])
-            info['q_taken'] = advs+vals
-            info['vals'], info['advs'] = vals, advs
+            vals = self.acs[ac_name].critic.predict(states_actions)
+            info['states_actions'] = states_actions
+            info['vals'] = vals
             for val, (row, col) in zip(vals, info['locs']):
                 val_map[row, col] = val
         return val_map

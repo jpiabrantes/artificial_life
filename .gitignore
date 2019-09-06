@@ -1,6 +1,11 @@
-checkpoints/*
-examples/checkpoints/*
+checkpoints_old/
+replay/images/
+replay/data/
+replay/dicts/
+checkpoints_no_weight_decay/
+checkpoints/
 .idea
+*.pkl
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
