@@ -45,4 +45,4 @@ Change these things to train on the Sexual Colony or Deadly Colony. To use the b
 
 # Replay
 
-With the NN trained to a certain point I would execute a rollout and save the actions taken and etc. I used `interface.py` to play back that rollout and analyse what was going on.
+With the NN trained to a certain point I would execute a rollout and save the actions taken and the state of the env. I used `interface.py` to play back that rollout and analyse what was going on.
