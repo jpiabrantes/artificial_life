@@ -84,7 +84,7 @@ setproctitle==1.1.10
 six==1.12.0
 sklearn==0.0
 tb-nightly==1.14.0a20190603
-tensorflow-gpu==2.0.0b1
+tensorflow-gpu==2.5.1
 termcolor==1.1.0
 terminado==0.8.2
 testpath==0.4.2
